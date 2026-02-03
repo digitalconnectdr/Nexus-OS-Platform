@@ -12,6 +12,7 @@ class Organization(Base):
     name = Column(String, nullable=False)
     slug = Column(String, unique=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    is_deleted = Column(Boolean, default=False)
 
     # Relationships
     users = relationship("UserProfile", back_populates="organization")

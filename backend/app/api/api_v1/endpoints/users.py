@@ -386,3 +386,48 @@ async def delete_user(
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al eliminar usuario: {str(e)}")
+
+@router.delete("/{user_id}/purge", status_code=status.HTTP_204_NO_CONTENT)
+async def purge_user(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("users", "purge", module="config_users"))
+):
+    """
+    PURGA DE USUARIO (Borrado Físico Irreversible).
+    Requiere permiso explícito 'purge' en la matriz.
+    """
+    # 1. Localizar usuario
+    stmt = select(UserProfile).where(UserProfile.id == user_id)
+    if current_user.role != UserRole.SUPER_ADMIN:
+        stmt = stmt.where(UserProfile.tenant_id == current_user.tenant_id)
+    
+    res = await db.execute(stmt)
+    db_user = res.scalar_one_or_none()
+    
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+
+    # 2. Validación de Jerarquía (Incluso para purga)
+    creator_level = get_role_level(current_user.role)
+    target_user_level = get_role_level(db_user.role)
+
+    if current_user.role != UserRole.SUPER_ADMIN:
+        if target_user_level >= creator_level:
+             raise HTTPException(status_code=403, detail="Jerarquía insuficiente para purgar este usuario.")
+
+    # 3. Borrado Físico DB Local
+    try:
+        # Primero intentamos borrar de Auth (Supabase)
+        try:
+             supabase_admin.auth.admin.delete_user(str(user_id))
+        except Exception as e:
+             logger.error(f"Error deleting user from Supabase Auth: {e}")
+             
+        await db.delete(db_user)
+        await db.commit()
+        return None
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error crítico al purgar usuario: {str(e)}")

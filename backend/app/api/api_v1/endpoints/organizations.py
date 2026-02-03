@@ -128,9 +128,19 @@ async def delete_organization(
         if user_check.scalar_one_or_none():
             raise HTTPException(status_code=400, detail="Cannot delete organization with assigned users")
             
-        await db.execute(delete(Organization).where(Organization.id == org_id))
+        # SOFT DELETE IMPLEMENTATION
+        # Instead of physical delete, we mark as deleted
+        stmt = select(Organization).where(Organization.id == org_id)
+        result = await db.execute(stmt)
+        org = result.scalar_one_or_none()
+        
+        if not org:
+             raise HTTPException(status_code=404, detail="Organization not found")
+             
+        org.is_deleted = True
+        
         await db.commit()
-        return {"status": "success", "message": "Organization deleted"}
+        return {"status": "success", "message": "Organization soft-deleted"}
     except HTTPException: raise
     except Exception as e:
         await db.rollback()
