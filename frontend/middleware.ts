@@ -54,18 +54,25 @@ export async function middleware(request: NextRequest) {
         }
     )
 
+    // 🚨 EMERGENCY FAILSAFE: Si el usuario va al Login, lo dejamos pasar SIEMPRE.
+    if (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/auth')) {
+        return response
+    }
+
     let user = null;
 
     try {
         const { data: { user: supabaseUser }, error } = await supabase.auth.getUser()
         if (error) {
-            console.warn("⚠️ Middleware Auth Error:", error.message);
+            // Log silencioso para no alarmar en consola de servidor si es solo token invalido
+            // console.warn("⚠️ Middleware Auth Info:", error.message);
         } else {
             user = supabaseUser;
         }
     } catch (err) {
-        console.error("❌ Middleware Critical Failure:", err);
-        // Failsafe: Si falla todo, asumimos no autenticado pero no rompemos la app
+        console.error("❌ Middleware Critical Failure (Ignored to keep site alive):", err);
+        // Failsafe: Si falla la conexión con Supabase (500), tratamos como no-auth y dejamos pasar
+        // para que la UI maneje el login, en vez de explotar con un error de Vercel.
     }
 
     // LÓGICA DE PROTECCIÓN:
