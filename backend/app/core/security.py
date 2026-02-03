@@ -61,8 +61,6 @@ async def get_current_user(
         if not supabase_id:
             raise HTTPException(status_code=401, detail="Token inválido: ID de usuario no encontrado")
             
-        # [DEBUG IDENTITY]
-        logger.info(f"🕵️‍♂️ [AUTH DEBUG] Intentando validar usuario: {supabase_id}")
     except jwt.PyJWTError as e:
         logger.warning(f"🔐 Local JWT Validation Failed: {e}")
         raise HTTPException(

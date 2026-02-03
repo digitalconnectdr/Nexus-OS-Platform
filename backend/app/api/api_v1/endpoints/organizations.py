@@ -103,6 +103,17 @@ async def update_organization(
         await db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
+@router.put("/{org_id}", response_model=OrganizationOut)
+async def update_organization_put(
+    org_id: uuid.UUID,
+    org_in: OrganizationUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("organizations", "update", module="policies"))
+):
+    """Alias PUT para actualización de organizaciones"""
+    return await update_organization(org_id, org_in, db, current_user)
+
 @router.delete("/{org_id}")
 async def delete_organization(
     org_id: uuid.UUID,

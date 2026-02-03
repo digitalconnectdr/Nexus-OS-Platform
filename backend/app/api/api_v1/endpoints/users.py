@@ -280,6 +280,17 @@ async def update_user(
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al actualizar: {str(e)}")
 
+@router.put("/{user_id}", response_model=UserProfileOut)
+async def update_user_put(
+    user_id: UUID,
+    user_in: UserProfileBase,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("users", "update", module="config_users"))
+):
+    """Alias PUT para actualización completa o parcial (Legacy Support)"""
+    return await update_user(user_id, user_in, db, current_user)
+
 @router.post("/{user_id}/reactivate", response_model=UserProfileOut)
 async def reactivate_user(
     user_id: UUID,
