@@ -4,6 +4,7 @@ from slowapi.errors import RateLimitExceeded
 import time
 import logging
 from app.core.database import engine, Base
+from app.core.config import settings
 
 # Configure logging
 logging.basicConfig(
@@ -62,7 +63,7 @@ async def on_startup():
     logger.info("✅ [STARTUP] Tablas sincronizadas correctamente.")
 
 # Configuración de CORS (Seguridad de Grado Producción)
-allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "*")
+allowed_origins_raw = settings.BACKEND_CORS_ORIGINS
 if allowed_origins_raw == "*":
     origins = ["*"]
 else:

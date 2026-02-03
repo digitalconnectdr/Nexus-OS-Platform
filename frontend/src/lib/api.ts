@@ -1,7 +1,8 @@
 import { supabase } from './supabase';
 import { toast } from '@/hooks/use-toast';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:82';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+console.log("🚀 Frontend API Configured URL:", API_URL);
 
 export async function fetchFromAPI(endpoint: string, options: any = {}, retries = 1) {
     let lastError: any;

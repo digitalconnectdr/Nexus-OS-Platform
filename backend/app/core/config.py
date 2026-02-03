@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    
+    # CORS
+    BACKEND_CORS_ORIGINS: str = "http://localhost:3000,https://nexus-os-platform.vercel.app"
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True, extra="ignore")
 
