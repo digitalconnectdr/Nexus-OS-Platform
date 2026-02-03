@@ -116,10 +116,38 @@ async def delete_campaign(
         if not db_campaign:
             raise HTTPException(status_code=404, detail="Campaña no encontrada")
             
-        db_campaign.is_active = False
+        db_campaign.is_deleted = True
+        db_campaign.is_active = False # Deactivate as well
         await db.commit()
-        return {"status": "success", "message": "Campaign deactivated"}
+        return {"status": "success", "message": "Campaign soft-deleted"}
     except Exception as e:
         await db.rollback()
         logger.error(f"Error deleting campaign via SQL: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+@router.delete("/{campaign_id}/purge", status_code=204)
+async def purge_campaign(
+    campaign_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("campaigns", "purge", module="config_campaigns"))
+):
+    """PURGA DE CAMPAÑA: Borrado físico irreversible."""
+    try:
+        stmt = select(Campaign).where(Campaign.id == campaign_id, Campaign.tenant_id == current_user.tenant_id)
+        result = await db.execute(stmt)
+        db_campaign = result.scalar_one_or_none()
+        
+        if not db_campaign:
+            raise HTTPException(status_code=404, detail="Campaña no encontrada")
+            
+        await db.delete(db_campaign)
+        await db.commit()
+        return None
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error purging campaign via SQL: {e}")
+        # Manejo de error FK explícito si hay hijos
+        if "foreign key constraint" in str(e).lower():
+             raise HTTPException(status_code=409, detail="No se puede purgar la campaña porque tiene dependencias (productos/ventas). Elimine primero los registros dependientes.")
+        raise HTTPException(status_code=500, detail=str(e))

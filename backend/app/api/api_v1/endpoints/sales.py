@@ -287,6 +287,41 @@ async def delete_sale(
     await db.commit()
     return {"status": "success"}
 
+@router.delete("/{sale_id}/purge", status_code=204)
+async def purge_sale(
+    sale_id: uuid.UUID,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("sales", "purge", module="dashboard"))
+):
+    """
+    PURGA DE VENTA: Borrado físico irreversible.
+    Requiere permiso explícito 'sales:purge'.
+    """
+    result = await db.execute(
+        select(SalesOrder)
+        .where(SalesOrder.id == sale_id)
+        .where(SalesOrder.tenant_id == current_user.tenant_id)
+    )
+    sale = result.scalar_one_or_none()
+    if not sale:
+        raise HTTPException(
+            status_code=404, 
+            detail="Venta no encontrada o no tiene permisos para purgarla."
+        )
+    
+    # Optional: Should we mandate that it must be soft-deleted first? 
+    # For flexibility, we allow purging directly or from trash.
+    
+    try:
+        await db.delete(sale)
+        await db.commit()
+        return None
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"PURGE ERROR: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error al purgar venta: {str(e)}")
+
 @router.put("/{sale_id}", response_model=Any)
 async def update_sale(
     sale_id: uuid.UUID,

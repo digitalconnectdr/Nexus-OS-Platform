@@ -171,6 +171,32 @@ async def delete_goal(
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found or access denied")
     # Soft delete (Logical Deletion)
+    goal.is_deleted = True
     goal.is_active = False
     await db.commit()
-    return {"status": "success", "message": "Goal deactivated"}
+    return {"status": "success", "message": "Goal soft-deleted"}
+
+@router.delete("/{goal_id}/purge", status_code=204)
+async def purge_goal(
+    goal_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("goals", "purge", module="config_goals"))
+):
+    """PURGA DE META: Borrado físico irreversible."""
+    result = await db.execute(
+        select(SalesGoal)
+        .where(SalesGoal.id == goal_id)
+        .where(SalesGoal.tenant_id == current_user.tenant_id)
+    )
+    goal = result.scalar_one_or_none()
+    if not goal:
+        raise HTTPException(status_code=404, detail="Meta no encontrada.")
+        
+    try:
+        await db.delete(goal)
+        await db.commit()
+        return None
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al purgar meta: {str(e)}")

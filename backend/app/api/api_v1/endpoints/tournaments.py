@@ -292,6 +292,33 @@ async def delete_tournament(
     if not db_obj:
         raise HTTPException(status_code=404, detail="Tournament not found")
         
-    await db.delete(db_obj)
+    db_obj.is_deleted = True
+    db_obj.is_active = False
     await db.commit()
-    return {"status": "success", "message": "Tournament deleted"}
+    return {"status": "success", "message": "Tournament soft-deleted"}
+
+@router.delete("/{tournament_id}/purge", status_code=204)
+async def purge_tournament(
+    tournament_id: UUID,
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("tournaments", "purge"))
+):
+    """PURGA DE TORNEO: Borrado físico irreversible."""
+    stmt = select(Tournament).where(
+        Tournament.id == tournament_id,
+        Tournament.tenant_id == current_user.tenant_id
+    )
+    result = await db.execute(stmt)
+    db_obj = result.scalar_one_or_none()
+    
+    if not db_obj:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+        
+    try:
+        await db.delete(db_obj)
+        await db.commit()
+        return None
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al purgar torneo: {str(e)}")
