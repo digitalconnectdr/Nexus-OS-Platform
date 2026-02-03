@@ -73,20 +73,50 @@ async def on_startup():
         await conn.run_sync(Base.metadata.create_all)
     logger.info("✅ [STARTUP] Tablas sincronizadas correctamente.")
 
-# Configuración de CORS (Seguridad de Grado Producción)
-allowed_origins_raw = settings.BACKEND_CORS_ORIGINS
-if allowed_origins_raw == "*":
-    origins = ["*"]
-else:
-    origins = [o.strip() for o in allowed_origins_raw.split(",")]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# --------------------------------------------------------------------------------
+# CRITICAL: CORS MIDDLEWARE MUST BE THE LAST ADDED TO BE THE FIRST EXECUTED
+# --------------------------------------------------------------------------------
+logger.info("🔧 Configuring CORS Middleware...")
+
+try:
+    # 1. Get origins from settings or fallback
+    allowed_origins_raw = getattr(settings, "BACKEND_CORS_ORIGINS", "*")
+    
+    # 2. Parse origins
+    if allowed_origins_raw == "*":
+        origins = ["*"]
+    elif isinstance(allowed_origins_raw, list):
+        origins = allowed_origins_raw
+    else:
+        origins = [o.strip() for o in allowed_origins_raw.split(",")]
+    
+    # 3. Add Hardcoded Vercel Origin (Safety Net)
+    vercel_origin = "https://nexus-os-platform.vercel.app"
+    if vercel_origin not in origins and "*" not in origins:
+        origins.append(vercel_origin)
+        
+    logger.info(f"✅ CORS Allowed Origins: {origins}")
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["*"]
+    )
+except Exception as e:
+    logger.error(f"❌ CORS Setup Failed: {e}")
+    # Fallback permissive for recovery
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
 
 # --- LOGGING MIDDLEWARE ---
 @app.middleware("http")
