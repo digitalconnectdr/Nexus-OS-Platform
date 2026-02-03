@@ -4,7 +4,7 @@ import { toast } from '@/hooks/use-toast';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 console.log("🚀 Frontend API Configured URL:", API_URL);
 
-export async function fetchFromAPI(endpoint: string, options: any = {}, retries = 1) {
+export async function fetchFromAPI(endpoint: string, options: any = {}, retries = 3) {
     let lastError: any;
 
     const { data: { session } } = await supabase.auth.getSession();
