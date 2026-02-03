@@ -336,6 +336,42 @@ async def update_password(
         logger.error(f"Error resetting password for user {user_id}: {str(e)}")
         # Check if error message from supabase contains useful info
         detail = str(e)
-        if "Password should be" in detail:
-            detail = "La contraseña no cumple con los requisitos de seguridad de Supabase."
-        raise HTTPException(status_code=400, detail=detail)
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("users", "delete", module="config_users"))
+):
+    """
+    Soft-delete de usuario. Requiere permiso explícito en la matriz.
+    """
+    # 1. Localizar usuario
+    stmt = select(UserProfile).where(UserProfile.id == user_id)
+    if current_user.role != UserRole.SUPER_ADMIN:
+        stmt = stmt.where(UserProfile.tenant_id == current_user.tenant_id)
+    
+    res = await db.execute(stmt)
+    db_user = res.scalar_one_or_none()
+    
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+
+    # 2. Validación de Jerarquía
+    creator_level = get_role_level(current_user.role)
+    target_user_level = get_role_level(db_user.role)
+
+    if current_user.role != UserRole.SUPER_ADMIN:
+        if target_user_level >= creator_level:
+             raise HTTPException(status_code=403, detail="Jerarquía insuficiente para eliminar este usuario.")
+
+    # 3. Soft Delete
+    db_user.is_deleted = True
+    db_user.is_active = False # Desactivar acceso inmediatamente
+    
+    try:
+        await db.commit()
+        return None
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al eliminar usuario: {str(e)}")
