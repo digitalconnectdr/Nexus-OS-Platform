@@ -54,7 +54,20 @@ export async function middleware(request: NextRequest) {
         }
     )
 
-    const { data: { user } } = await supabase.auth.getUser()
+    let user = null;
+
+    try {
+        const { data: { user: supabaseUser }, error } = await supabase.auth.getUser()
+        if (error) {
+            console.warn("⚠️ Middleware Auth Error:", error.message);
+        } else {
+            user = supabaseUser;
+        }
+    } catch (err) {
+        console.error("❌ Middleware Critical Failure:", err);
+        // Failsafe: Si falla todo, asumimos no autenticado (o permitimos paso si prefieres riesgo)
+        // Por seguridad, mejor tratamos como no-auth y dejamos que el flujo continue.
+    }
 
     // LÓGICA DE PROTECCIÓN:
 
