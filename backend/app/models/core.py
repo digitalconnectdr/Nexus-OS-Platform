@@ -76,6 +76,7 @@ class Campaign(Base):
     is_active = Column(Boolean, default=True)
     requires_digitization = Column(Boolean, default=False) # Backoffice optimization
     default_status_id = Column(UUID(as_uuid=True), ForeignKey("statuses.id"), nullable=True)
+    is_deleted = Column(Boolean, default=False)
 
     # Relationships
     organization = relationship("Organization", back_populates="campaigns")
@@ -96,6 +97,7 @@ class Product(Base):
     current_concept = Column(Text)
     incentive = Column(Numeric(10, 2)) # For agents
     is_active = Column(Boolean, default=True)
+    is_deleted = Column(Boolean, default=False)
     
     @property
     def campaign_name(self):
