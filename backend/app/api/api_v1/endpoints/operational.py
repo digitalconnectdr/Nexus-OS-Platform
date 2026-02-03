@@ -7,7 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, case
 
 from app.api import deps
-from app.models import User, SalesGoal, SalesOrder, Campaign
+from app.core.security import get_current_user, check_permission
+from app.models import User, SalesGoal, SalesOrder, Campaign, UserProfile
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -43,19 +44,26 @@ def get_prev_month(month_str: str) -> str:
         return f"{year-1}-12"
     return f"{year}-{month-1:02d}"
 
-# --- 2. ENDPOINT PRINCIPAL ---
+# --- ENDPOINT PRINCIPAL ---
 @router.get("/")
 async def get_operational_results(
     month: str = Query(..., description="Format YYYY-MM"),
-    db: AsyncSession = Depends(deps.get_db)
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("performance", "efficiency", module="performance"))
 ):
     prev_month = get_prev_month(month)
     
     try:
-        # 1. Obtener todos los usuarios (perfiles)
-        # Filtramos por roles que nos interesan (Supervisores y Agentes)
-        # Nota: Usamos una consulta simple y procesamos en memoria para facilitar la jerarquía
-        user_stmt = select(User)
+        # 1. Obtener todos los usuarios (perfiles) - EXCLUYENDO ADMINS/SUPER ADMINS
+        # Filtramos por tenant y aseguramos que no estén borrados y que NO sean administrativos
+        print(f"DEBUG: Endpoint called by {current_user.email} | Tenant Logic: {current_user.tenant_id}")
+        
+        user_stmt = select(UserProfile).where(
+            UserProfile.tenant_id == current_user.tenant_id, 
+            UserProfile.is_deleted == False,
+            UserProfile.role.notin_(['Super Admin', 'Administrador'])
+        )
         user_result = await db.execute(user_stmt)
         users = {str(u.id): u for u in user_result.scalars().all()}
 
@@ -64,11 +72,22 @@ async def get_operational_results(
             SalesGoal.user_id,
             func.sum(SalesGoal.target_amount).label('money'),
             func.sum(SalesGoal.target_units).label('count')
-        ).where(SalesGoal.month == month).group_by(SalesGoal.user_id)
+        ).where(SalesGoal.month == month, SalesGoal.tenant_id == current_user.tenant_id).group_by(SalesGoal.user_id)
         goal_res = await db.execute(goal_stmt)
         goals = {str(r.user_id): r for r in goal_res.all()}
 
-        # 3. Obtener Ventas (Mes Actual)
+        # 3. Obtener Ventas (Mes Actual) Filtradas por Estatus Productivos
+        from app.models.status import Status
+        prod_status_stmt = select(Status.name).where(Status.tenant_id == current_user.tenant_id, Status.is_productive == True)
+        prod_status_res = await db.execute(prod_status_stmt)
+        productive_statuses = prod_status_res.scalars().all()
+        
+        # If no productive statuses are defined, we return empty results rather than hardcoded fallbacks
+        # to force the user to configure their lifecycle correctly.
+        if not productive_statuses:
+            logger.warning(f"⚠️ No productive statuses defined for tenant {current_user.tenant_id}. KPI counts will be zero.")
+            productive_statuses = []
+
         # Optimizamos filtros de fecha para usar rangos (mejor para índices)
         start_date = datetime(int(month.split('-')[0]), int(month.split('-')[1]), 1)
         if int(month.split('-')[1]) == 12:
@@ -83,7 +102,9 @@ async def get_operational_results(
         ).where(
             SalesOrder.created_at >= start_date,
             SalesOrder.created_at < end_date,
-            SalesOrder.status == "Approved" # Solo ventas aprobadas para KPIs
+            SalesOrder.tenant_id == current_user.tenant_id,
+            SalesOrder.is_deleted == False,
+            SalesOrder.status.in_(productive_statuses)
         ).group_by(SalesOrder.agent_id)
         sales_res = await db.execute(sales_stmt)
         sales = {str(r.agent_id): r for r in sales_res.all()}
@@ -99,7 +120,9 @@ async def get_operational_results(
         ).where(
             SalesOrder.created_at >= prev_start,
             SalesOrder.created_at < prev_end,
-            SalesOrder.status == "Approved"
+            SalesOrder.tenant_id == current_user.tenant_id,
+            SalesOrder.is_deleted == False,
+            SalesOrder.status.in_(productive_statuses)
         ).group_by(SalesOrder.agent_id)
         prev_sales_res = await db.execute(prev_sales_stmt)
         prev_sales = {str(r.agent_id): r for r in prev_sales_res.all()}
@@ -107,12 +130,10 @@ async def get_operational_results(
         # 5. Construir lista de Agentes y calcular sus métricas
         agents_data = []
         for uid, user in users.items():
-            # Si el rol no es supervisor, lo tratamos como potencial agente en la tabla inferior
-            # (Incluso si es supervisor, si tiene ventas propias, podría aparecer, 
-            # pero el requerimiento separa las tablas)
-            
+            # FILTRO ESTRICTO: Solo mostrar en la tabla de agentes a los que tienen rol 'Representante'
             u_role = (user.role or "").lower()
-            is_sup = any(x in u_role for x in ["supervisor", "supervision", "lider"])
+            if u_role != "representante":
+                continue
             
             # Datos del mes actual
             g = goals.get(uid)
@@ -161,15 +182,14 @@ async def get_operational_results(
             }
             agents_data.append(agent_info)
 
-        # 6. Construir lista de Supervisores aggregando a sus agentes
-        # Requerimiento: Supervisor senior, Supervision
-        supervisor_roles = ["supervisor senior", "supervision"]
+        # Requerimiento: Supervisor senior, Supervision, Supervisor, Lider, Liderazgo, Administrador, Gerente, Líder
+        supervisor_roles = ["supervisor senior", "supervision", "supervisión", "supervisor", "lider", "líder", "gerente"]
         supervisors = []
         
         for uid, user in users.items():
             u_role = (user.role or "").lower()
             if any(role in u_role for role in supervisor_roles):
-                # Es un supervisor. Calculamos agregados de sus subordinados
+                # Es un supervisor. Calculamos agregados de sus subordinados (que sí son Representantes)
                 team = [a for a in agents_data if a["supervisor_id"] == uid]
                 
                 # Totales del equipo

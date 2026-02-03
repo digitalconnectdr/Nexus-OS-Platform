@@ -10,6 +10,8 @@ import {
 } from "@tanstack/react-table";
 import { PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { fetchFromAPI } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
@@ -109,6 +111,7 @@ const InlineCell = ({
 };
 
 export default function OperativeMasterPanel({ initialData = [] }: { initialData?: Sale[] }) {
+    const { toast } = useToast();
     const [records, setRecords] = useState<Sale[]>(initialData);
     const [statusOptions, setStatusOptions] = useState<StatusOption[]>([]);
     const [loading, setLoading] = useState(true);
@@ -166,24 +169,40 @@ export default function OperativeMasterPanel({ initialData = [] }: { initialData
                 method: 'PUT',
                 body: JSON.stringify(backendPayload)
             });
-        } catch (err) {
+        } catch (err: any) {
             console.error("Save failed", err);
             setRecords(oldRecords);
-            alert("Error al guardar cambios.");
+            toast({
+                title: "Error de Guardado",
+                description: err.message || "No se pudieron aplicar los cambios en el Panel Maestro.",
+                variant: "destructive"
+            });
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm("¿Está seguro de eliminar permanentemente esta venta?")) return;
-        try {
-            await fetchFromAPI(`/api/v1/sales/${id}`, {
-                method: 'DELETE'
-            });
-            setRecords(prev => prev.filter(r => r.id !== id));
-        } catch (err) {
-            console.error(err);
-            alert("Error de conexión al intentar eliminar el registro.");
-        }
+    const handleDelete = (id: string) => {
+        toast({
+            title: "¿Confirmar Eliminación?",
+            description: "Esta acción eliminará la venta permanentemente del Panel Maestro.",
+            variant: "destructive",
+            duration: Infinity,
+            action: (
+                <ToastAction
+                    altText="ELIMINAR"
+                    onClick={async () => {
+                        try {
+                            await fetchFromAPI(`/api/v1/sales/${id}`, { method: 'DELETE' });
+                            setRecords(prev => prev.filter(r => r.id !== id));
+                            toast({ title: "Venta Eliminada", description: "El registro ya no existe." });
+                        } catch (err: any) {
+                            toast({ title: "Error", description: err.message, variant: "destructive" });
+                        }
+                    }}
+                >
+                    ELIMINAR
+                </ToastAction>
+            )
+        });
     };
 
     const columns: ColumnDef<Sale>[] = [

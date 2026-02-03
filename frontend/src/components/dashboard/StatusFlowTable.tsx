@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PencilIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 
 import { fetchFromAPI } from "@/lib/api";
 
@@ -33,6 +35,7 @@ export default function StatusFlowTable({
     data: Status[],
     onSave: (items: Status[]) => void
 }) {
+    const { toast } = useToast();
     const [localData, setLocalData] = useState<Status[]>(data || []);
     const [selectedRow, setSelectedRow] = useState<Status | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -62,24 +65,37 @@ export default function StatusFlowTable({
             setLocalData(safeList);
             onSave(safeList);
             setIsModalOpen(false);
+            toast({ title: "Estado Actualizado", description: "Los cambios han sido aplicados correctamente." });
         } catch (err: any) {
-            alert("Error al guardar: " + err.message);
+            toast({ title: "Error al Guardar", description: err.message, variant: "destructive" });
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm("¿Está seguro de eliminar este estado operativo? Esta acción no se puede deshacer.")) return;
-        try {
-            await fetchFromAPI(`/api/v1/statuses/${id}`, {
-                method: 'DELETE'
-            });
-            const newData = localData.filter(item => item.id !== id);
-            setLocalData(newData);
-            onSave(newData);
-        } catch (err: any) {
-            console.error(err);
-            alert(err.message || "Error al eliminar el registro.");
-        }
+    const handleDelete = (id: string) => {
+        toast({
+            title: "¿Eliminar Estatus Operativo?",
+            description: "Esta acción no se puede deshacer y afectará a las ventas vinculadas.",
+            variant: "destructive",
+            duration: Infinity,
+            action: (
+                <ToastAction
+                    altText="ELIMINAR"
+                    onClick={async () => {
+                        try {
+                            await fetchFromAPI(`/api/v1/statuses/${id}`, { method: 'DELETE' });
+                            const newData = localData.filter(item => item.id !== id);
+                            setLocalData(newData);
+                            onSave(newData);
+                            toast({ title: "Estatus Eliminado", description: "El catálogo ha sido actualizado." });
+                        } catch (err: any) {
+                            toast({ title: "Error", description: err.message, variant: "destructive" });
+                        }
+                    }}
+                >
+                    ELIMINAR
+                </ToastAction>
+            )
+        });
     };
 
     return (

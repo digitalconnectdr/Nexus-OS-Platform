@@ -21,7 +21,8 @@ class UserRole(str, Enum):
 class UserProfileBase(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
-    role: Optional[UserRole] = None
+    role: Optional[Any] = None # Cambiado a Any temporalmente para evitar 422 si hay roles raros
+    tenant_id: Optional[UUID] = None # Added for easier access
     avatar_url: Optional[str] = None
     is_active: bool = True
     is_deleted: bool = False
@@ -54,6 +55,7 @@ class UserProfileCreate(UserProfileBase):
 class UserResponse(UserProfileBase):
     id: UUID
     tenant_id: UUID
+    organization_name: Optional[str] = None # For display in user table
     email: Optional[str] = None
     last_seen_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)

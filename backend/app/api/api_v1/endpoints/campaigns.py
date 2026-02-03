@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.encoders import jsonable_encoder
+import logging
+from app.core.supabase import supabase_admin
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from typing import List, Optional, Any
 from app.api.deps import get_db
-from app.core.security import check_permission
-from app.models.core import Campaign
+from app.core.security import check_permission, get_current_user
+from app.models.core import Campaign, UserProfile
 from app.schemas.core import CampaignOut, CampaignUpdate, CampaignCreate
 from uuid import UUID
 
@@ -13,79 +16,110 @@ router = APIRouter()
 
 @router.get("/", response_model=List[CampaignOut])
 async def list_campaigns(
-    db: AsyncSession = Depends(get_db),
     skip: int = 0,
     limit: int = 100,
-    size: int = None,  # Alias for limit (backward compatibility)
+    size: int = None,
     include_inactive: bool = False,
-    _: bool = Depends(check_permission("campaigns", "read"))
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("campaigns", "read", module="config_campaigns"))
 ):
-    """
-    List campaigns with pagination and optional filtering for inactive records.
-    Defaults to active records only.
-    """
+    """Listado de campañas vía SQLAlchemy con relaciones"""
     try:
-        # Use 'size' if provided, otherwise use 'limit'
         page_size = size if size is not None else limit
-        query = select(Campaign).options(selectinload(Campaign.default_status)).offset(skip).limit(page_size)
-        if not include_inactive:
-            query = query.where(Campaign.is_active == True)
+        stmt = select(Campaign).options(selectinload(Campaign.default_status)).where(Campaign.tenant_id == current_user.tenant_id)
         
-        result = await db.execute(query)
-        campaigns = result.scalars().all()
-        return campaigns
+        if not include_inactive:
+            stmt = stmt.where(Campaign.is_active == True)
+        
+        # Pagination
+        stmt = stmt.offset(skip).limit(page_size)
+        
+        result = await db.execute(stmt)
+        return result.scalars().all()
     except Exception as e:
-        print(f"Error listing campaigns: {e}")
+        logger.error(f"Error listing campaigns via SQLAlchemy: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/", response_model=CampaignOut)
 async def create_campaign(
     campaign_in: CampaignCreate,
     db: AsyncSession = Depends(get_db),
-    _: bool = Depends(check_permission("campaigns", "write"))
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("campaigns", "create", module="config_campaigns"))
 ):
-    campaign = Campaign(**campaign_in.model_dump())
-    db.add(campaign)
-    await db.commit()
-    
-    # Re-fetch with eager loading for the response
-    query = select(Campaign).options(selectinload(Campaign.default_status)).where(Campaign.id == campaign.id)
-    result = await db.execute(query)
-    return result.scalar_one()
+    """Alta de campaña vía SQL"""
+    try:
+        campaign_data = campaign_in.model_dump()
+        campaign_data["tenant_id"] = current_user.tenant_id
+        
+        db_campaign = Campaign(**campaign_data)
+        db.add(db_campaign)
+        await db.commit()
+        await db.refresh(db_campaign)
+        
+        # Recargar con relaciones
+        stmt = select(Campaign).options(selectinload(Campaign.default_status)).where(Campaign.id == db_campaign.id)
+        res = await db.execute(stmt)
+        return res.scalar_one()
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error creating campaign via SQL: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 @router.put("/{campaign_id}", response_model=CampaignOut)
 async def update_campaign(
     campaign_id: UUID,
     campaign_in: CampaignUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("campaigns", "update", module="config_campaigns"))
 ):
-    result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
-    campaign = result.scalar_one_or_none()
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
-    
-    update_data = campaign_in.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(campaign, key, value)
-    
-    await db.commit()
-    
-    # Re-fetch with eager loading for the response
-    query = select(Campaign).options(selectinload(Campaign.default_status)).where(Campaign.id == campaign_id)
-    result = await db.execute(query)
-    return result.scalar_one()
+    """Actualización de campaña vía SQL"""
+    try:
+        stmt = select(Campaign).where(Campaign.id == campaign_id, Campaign.tenant_id == current_user.tenant_id)
+        result = await db.execute(stmt)
+        db_campaign = result.scalar_one_or_none()
+        
+        if not db_campaign:
+            raise HTTPException(status_code=404, detail="Campaña no encontrada")
+
+        update_data = campaign_in.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(db_campaign, key, value)
+            
+        await db.commit()
+        
+        # Retornar enriquecido
+        stmt_e = select(Campaign).options(selectinload(Campaign.default_status)).where(Campaign.id == campaign_id)
+        res_e = await db.execute(stmt_e)
+        return res_e.scalar_one()
+    except HTTPException: raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error updating campaign via SQL: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 @router.delete("/{campaign_id}")
 async def delete_campaign(
     campaign_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _: bool = Depends(check_permission("campaigns", "delete"))
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("campaigns", "delete", module="config_campaigns"))
 ):
-    result = await db.execute(select(Campaign).where(Campaign.id == campaign_id))
-    campaign = result.scalar_one_or_none()
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
-    
-    # Soft delete (Logical Deletion)
-    campaign.is_active = False
-    await db.commit()
-    return {"status": "success", "message": "Campaign deactivated"}
+    """Baja lógica vía SQL"""
+    try:
+        stmt = select(Campaign).where(Campaign.id == campaign_id, Campaign.tenant_id == current_user.tenant_id)
+        result = await db.execute(stmt)
+        db_campaign = result.scalar_one_or_none()
+        
+        if not db_campaign:
+            raise HTTPException(status_code=404, detail="Campaña no encontrada")
+            
+        db_campaign.is_active = False
+        await db.commit()
+        return {"status": "success", "message": "Campaign deactivated"}
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error deleting campaign via SQL: {e}")
+        raise HTTPException(status_code=400, detail=str(e))

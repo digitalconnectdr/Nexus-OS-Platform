@@ -1,18 +1,37 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
     ShoppingBagIcon,
     ArrowPathIcon,
     MagnifyingGlassIcon,
     DocumentTextIcon,
-    ChevronUpIcon
+    ChevronUpIcon,
+    ChartBarIcon,
+    EyeIcon,
+    EyeSlashIcon,
+    FunnelIcon,
+    XMarkIcon,
+    AdjustmentsHorizontalIcon
 } from '@heroicons/react/24/outline';
 import { fetchFromAPI } from '@/lib/api';
 import RealTimeTable, { Sale } from '@/components/dashboard/RealTimeTable';
 import SalesExportModal from './SalesExportModal';
+import {
+    SalesByStatusChart,
+    SalesTrendChart,
+    TopCampaignsChart,
+    TopAgentsChart
+} from '../charts';
+import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
+import { AdvancedFilters, FilterCriteria, applyFilters, extractUniqueAgents, extractUniqueProducts } from '../filters';
+import LoadingState from '@/components/ui/LoadingState';
+import { usePermission } from '@/hooks/usePermission';
+import { LockClosedIcon } from '@heroicons/react/24/outline';
 
 export default function SalesHistoryTable() {
+    const { toast } = useToast();
     const [sales, setSales] = useState<Sale[]>([]);
     const [statuses, setStatuses] = useState<any[]>([]);
     const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -21,6 +40,61 @@ export default function SalesHistoryTable() {
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [pageIndex, setPageIndex] = useState(0);
     const [pageSize, setPageSize] = useState(20);
+
+    // Charts visibility state with localStorage persistence
+    const [showCharts, setShowCharts] = useState<boolean>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('history-show-charts');
+            return saved !== null ? JSON.parse(saved) : true; // Default: visible
+        }
+        return true;
+    });
+
+    // Filter states with localStorage persistence
+    const [showFilters, setShowFilters] = useState<boolean>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('history-show-filters');
+            return saved !== null ? JSON.parse(saved) : false; // Default: hidden
+        }
+        return false;
+    });
+
+    const [activeFilters, setActiveFilters] = useState<FilterCriteria>(() => {
+        if (typeof window !== 'undefined') {
+            const saved = localStorage.getItem('history-active-filters');
+            return saved ? JSON.parse(saved) : {};
+        }
+        return {};
+    });
+
+    const [supervisors, setSupervisors] = useState<any[]>([]);
+
+    // Filter state for drill-down from charts
+    const [activeFilter, setActiveFilter] = useState<{
+        type: string;
+        value: string;
+        label: string;
+    } | null>(null);
+
+    // Save charts visibility preference
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('history-show-charts', JSON.stringify(showCharts));
+        }
+    }, [showCharts]);
+
+    // Save filter preferences
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('history-show-filters', JSON.stringify(showFilters));
+        }
+    }, [showFilters]);
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('history-active-filters', JSON.stringify(activeFilters));
+        }
+    }, [activeFilters]);
 
     const loadData = async () => {
         setLoading(true);
@@ -32,10 +106,11 @@ export default function SalesHistoryTable() {
                 sort_by: '-created_at'
             });
 
-            const [salesData, statusesData, campaignsData] = await Promise.all([
+            const [salesData, statusesData, campaignsData, supervisorsData] = await Promise.all([
                 fetchFromAPI(`/api/v1/sales/?${params.toString()}`),
-                fetchFromAPI("/api/v1/statuses/"),
-                fetchFromAPI("/api/v1/campaigns/")
+                fetchFromAPI("/api/v1/selectors/statuses"),
+                fetchFromAPI("/api/v1/selectors/campaigns"),
+                fetchFromAPI("/api/v1/selectors/supervisors")
             ]);
 
             const safeSalesRaw = salesData?.items || [];
@@ -77,8 +152,9 @@ export default function SalesHistoryTable() {
 
             setSales(safeSales);
             setTotalRecords(salesData?.total || safeSales.length);
-            setStatuses(statusesData?.items || []);
-            setCampaigns(campaignsData?.items || []);
+            setStatuses(statusesData?.items || (Array.isArray(statusesData) ? statusesData : []));
+            setCampaigns(campaignsData?.items || (Array.isArray(campaignsData) ? campaignsData : []));
+            setSupervisors(supervisorsData?.items || (Array.isArray(supervisorsData) ? supervisorsData : []));
         } catch (err) {
             console.error("Error loading history data:", err);
         } finally {
@@ -86,9 +162,28 @@ export default function SalesHistoryTable() {
         }
     };
 
+    const { can, isLoading: permsLoading } = usePermission();
+
     useEffect(() => {
+        if (permsLoading) return;
+        if (!can('history', 'view')) return;
+
         loadData();
-    }, [pageIndex, pageSize]);
+    }, [pageIndex, pageSize, permsLoading, can]);
+
+    if (!permsLoading && !can('history', 'view')) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-400 space-y-4">
+                <div className="p-4 bg-slate-100 rounded-full">
+                    <LockClosedIcon className="w-12 h-12 opacity-20" />
+                </div>
+                <h3 className="text-sm font-black uppercase tracking-widest text-[#072D44]">Bóveda de Historial Bloqueada</h3>
+                <p className="text-[10px] font-bold uppercase tracking-wider max-w-xs text-center line-height-relaxed opacity-60">
+                    Tu perfil actual no posee permisos para consultar el Historial Maestro. Contacta a un administrador para habilitar 'history:view'.
+                </p>
+            </div>
+        );
+    }
 
     const handleUpdate = async (id: string, field: string, value: any) => {
         try {
@@ -105,64 +200,295 @@ export default function SalesHistoryTable() {
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm("¿Desea eliminar permanentemente?")) return;
-        try {
-            await fetchFromAPI(`/api/v1/sales/${id}`, { method: 'DELETE' });
-            loadData();
-        } catch (err) {
-            console.error("Delete failed:", err);
-        }
+    const handleDelete = (id: string) => {
+        toast({
+            title: "¿Confirmar Eliminación?",
+            description: "Esta acción eliminará el registro de forma permanente del historial.",
+            variant: "destructive",
+            duration: Infinity,
+            action: (
+                <ToastAction
+                    altText="ELIMINAR"
+                    onClick={async () => {
+                        try {
+                            await fetchFromAPI(`/api/v1/sales/${id}`, { method: 'DELETE' });
+                            toast({ title: "Registro Eliminado", description: "El historial ha sido actualizado." });
+                            loadData();
+                        } catch (err: any) {
+                            toast({ title: "Error", description: err.message, variant: "destructive" });
+                        }
+                    }}
+                >
+                    ELIMINAR
+                </ToastAction>
+            )
+        });
     };
 
+    // Drill-down handlers
+    const handleStatusClick = (statusId: string, statusName: string) => {
+        setActiveFilter({
+            type: 'status',
+            value: statusId,
+            label: `Estado: ${statusName}`
+        });
+    };
+
+    const handleCampaignClick = (campaignId: string, campaignName: string) => {
+        setActiveFilter({
+            type: 'campaign',
+            value: campaignId,
+            label: `Campaña: ${campaignName}`
+        });
+    };
+
+    const handleAgentClick = (agent: string) => {
+        setActiveFilter({
+            type: 'agent',
+            value: agent,
+            label: `Agente: ${agent.includes('@') ? agent.split('@')[0] : agent}`
+        });
+    };
+
+    const handleDateClick = (date: string) => {
+        setActiveFilter({
+            type: 'date',
+            value: date,
+            label: `Fecha: ${date}`
+        });
+    };
+
+    const clearFilter = () => {
+        setActiveFilter(null);
+    };
+
+    // Extract unique values for advanced filters
+    const uniqueAgents = useMemo(() => extractUniqueAgents(sales), [sales]);
+    const uniqueProducts = useMemo(() => extractUniqueProducts(sales), [sales]);
+
+    // Advanced filter handlers
+    const handleFilterChange = (filters: FilterCriteria) => {
+        setActiveFilters(filters);
+    };
+
+    const handleClearFilters = () => {
+        setActiveFilters({});
+    };
+
+    // Count active filters
+    const activeFilterCount = Object.keys(activeFilters).filter(key => {
+        const value = activeFilters[key as keyof FilterCriteria];
+        if (Array.isArray(value)) return value.length > 0;
+        return value !== undefined && value !== '';
+    }).length;
+
+    // Combined filtering: Apply both drill-down filter and advanced filters
+    const filteredSales = useMemo(() => {
+        let result = sales;
+
+        // First apply drill-down filter from charts
+        if (activeFilter) {
+            result = result.filter(sale => {
+                switch (activeFilter.type) {
+                    case 'status':
+                        return sale.status === activeFilter.value || sale.status === statuses.find(s => s.id === activeFilter.value)?.name;
+                    case 'campaign':
+                        return sale.campaign_id === activeFilter.value || sale.campaign === activeFilter.value;
+                    case 'agent':
+                        return sale.agent === activeFilter.value || sale.assigned_to === activeFilter.value;
+                    case 'date':
+                        return sale.date === activeFilter.value;
+                    default:
+                        return true;
+                }
+            });
+        }
+
+        // Then apply advanced filters
+        result = applyFilters(result, activeFilters);
+
+        return result;
+    }, [sales, activeFilter, activeFilters, statuses]);
+
     return (
-        <div className="w-full max-w-full pl-6 pr-6 py-4 space-y-6 bg-gray-50/30 min-h-screen">
-            <div className="flex items-center justify-between">
+        <div className="w-full max-w-[1600px] mx-auto p-6 space-y-6 animate-fade-in">
+            <header className="flex justify-between items-center mb-6">
                 <div>
-                    <h2 className="text-2xl font-black text-[#072D44] flex items-center gap-3 tracking-tight">
-                        <ShoppingBagIcon className="w-8 h-8 text-blue-600" />
-                        HISTORIAL MAESTRO
-                    </h2>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mt-1">
-                        Bóveda de Transacciones Terminadas e Históricas
+                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight uppercase">Historial Maestro</h1>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-1">
+                        Bóveda de Transacciones & Auditoría
                     </p>
                 </div>
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2 bg-[#072D44] text-white px-4 py-1.5 rounded-full shadow-lg">
+
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 bg-slate-900 text-white px-4 py-1.5 rounded-full shadow-lg">
                         <span className="text-[9px] font-black uppercase tracking-widest opacity-60">Registros</span>
                         <span className="text-sm font-black">{totalRecords.toLocaleString()}</span>
                     </div>
-                    <button
-                        onClick={() => setIsExportModalOpen(true)}
-                        className="bg-white hover:bg-slate-50 text-[#072D44] border border-gray-200 px-4 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-sm active:scale-95"
-                    >
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                        Exportar
-                    </button>
+
+                    {can('history', 'export') && (
+                        <button
+                            onClick={() => setIsExportModalOpen(true)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 h-10 rounded-xl shadow-lg shadow-emerald-100 transition-all group flex items-center gap-2 active:scale-95"
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span className="text-[10px] font-black uppercase tracking-widest">Exportar</span>
+                        </button>
+                    )}
+
                     <button
                         onClick={() => loadData()}
-                        className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-full transition-all shadow-sm border border-gray-100"
+                        className="p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-500 rounded-xl text-slate-400 hover:text-blue-600 transition-all shadow-sm active:scale-95"
+                        title="Sincronizar Datos"
                     >
-                        <ArrowPathIcon className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
+                        <ArrowPathIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                     </button>
+                </div>
+            </header>
+
+            {/* Content Toolbar - Consistent with other modules */}
+            <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+                <div className="flex items-center gap-4">
+                    {/* Toggle Charts */}
+                    {can('history', 'charts') && (
+                        <button
+                            onClick={() => setShowCharts(!showCharts)}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-sm active:scale-95 border
+                                ${showCharts ? 'bg-slate-900 text-white border-slate-900' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-slate-400'}`}
+                        >
+                            <ChartBarIcon className="w-4 h-4" />
+                            {showCharts ? "Ocultar Análisis" : "Ver Análisis"}
+                        </button>
+                    )}
+
+                    <div className="h-6 w-px bg-slate-200 dark:bg-slate-800" />
+
+                    {/* Toggle Filters */}
+                    {can('history', 'filters') && (
+                        <button
+                            onClick={() => setShowFilters(!showFilters)}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-sm active:scale-95 border
+                                ${showFilters ? 'bg-blue-600 text-white border-blue-600' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:border-blue-400'}`}
+                        >
+                            <FunnelIcon className="w-4 h-4" />
+                            Búsqueda Avanzada
+                            {activeFilterCount > 0 && (
+                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full ${showFilters ? 'bg-white text-blue-600' : 'bg-blue-600 text-white'}`}>
+                                    {activeFilterCount}
+                                </span>
+                            )}
+                        </button>
+                    )}
+                </div>
+
+                <div className="flex-1 flex justify-end">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        Auditoría de Ventas Nexus
+                    </p>
                 </div>
             </div>
 
-            {/* TABLA REUTILIZADA (MISMA CALIDAD) */}
-            <div className="relative">
-                {loading && (
-                    <div className="absolute inset-0 z-50 bg-white/60 backdrop-blur-sm flex items-center justify-center rounded-xl">
-                        <div className="flex flex-col items-center gap-3">
-                            <ArrowPathIcon className="w-10 h-10 text-blue-600 animate-spin" />
-                            <span className="text-[10px] font-black text-[#072D44] uppercase tracking-widest">Sincronizando Historial...</span>
+            {/* ADVANCED FILTERS SECTION */}
+            {showFilters && can('history', 'filters') && (
+                <AdvancedFilters
+                    statuses={statuses}
+                    campaigns={campaigns}
+                    agents={uniqueAgents}
+                    products={uniqueProducts}
+                    supervisors={supervisors}
+                    onFilterChange={handleFilterChange}
+                    initialFilters={activeFilters}
+                />
+            )}
+
+            {/* ACTIVE FILTERS INDICATOR (from Advanced Filters) */}
+            {activeFilterCount > 0 && can('history', 'filters') && (
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
+                    <div className="flex items-center gap-3 flex-wrap">
+                        <FunnelIcon className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-black text-blue-900 uppercase tracking-wider">
+                                {activeFilterCount} filtro{activeFilterCount > 1 ? 's' : ''} activo{activeFilterCount > 1 ? 's' : ''}:
+                            </span>
+                            <span className="text-xs font-bold text-blue-700">
+                                {filteredSales.length} de {sales.length} registros
+                            </span>
                         </div>
                     </div>
-                )}
+                    <button
+                        onClick={handleClearFilters}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-white border-2 border-blue-200 rounded-lg text-xs font-black text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all active:scale-95 uppercase tracking-wider"
+                    >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        Limpiar
+                    </button>
+                </div>
+            )}
+
+            {/* ACTIVE FILTER INDICATOR (from Chart Drill-Down) */}
+            {activeFilter && can('history', 'charts') && (
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
+                    <div className="flex items-center gap-3">
+                        <FunnelIcon className="w-5 h-5 text-blue-600" />
+                        <div>
+                            <p className="text-xs font-black text-blue-900 uppercase tracking-wider">Filtro Activo</p>
+                            <p className="text-sm font-bold text-blue-700 mt-0.5">{activeFilter.label}</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={clearFilter}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-white border-2 border-blue-200 rounded-lg text-xs font-black text-blue-600 hover:bg-blue-50 hover:border-blue-300 transition-all active:scale-95 uppercase tracking-wider"
+                    >
+                        <XMarkIcon className="w-4 h-4" />
+                        Limpiar Filtro
+                    </button>
+                </div>
+            )}
+
+            {/* INTERACTIVE CHARTS SECTION */}
+            {showCharts && can('history', 'charts') && (
+                <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                        <ChartBarIcon className="w-5 h-5 text-[#072D44]" />
+                        <h2 className="text-sm font-black text-[#072D44] uppercase tracking-tighter">Análisis Visual</h2>
+                        <span className="text-xs text-gray-400 font-medium">Click en cualquier gráfico para filtrar</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <SalesByStatusChart
+                            statuses={statuses}
+                            sales={filteredSales}
+                            onSegmentClick={handleStatusClick}
+                        />
+                        <SalesTrendChart
+                            sales={filteredSales}
+                            onPointClick={handleDateClick}
+                        />
+                        <TopCampaignsChart
+                            campaigns={campaigns}
+                            sales={filteredSales}
+                            onBarClick={handleCampaignClick}
+                            limit={5}
+                        />
+                        <TopAgentsChart
+                            sales={filteredSales}
+                            onBarClick={handleAgentClick}
+                            limit={5}
+                        />
+                    </div>
+                </div>
+            )}
+
+            {/* TABLA REUTILIZADA (MISMA CALIDAD) */}
+            <div className="relative">
+                {loading && <LoadingState message="Sincronizando Historial..." />}
 
                 <RealTimeTable
-                    data={sales}
+                    data={filteredSales}
                     statuses={statuses}
                     campaigns={campaigns}
                     onUpdate={handleUpdate}

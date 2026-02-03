@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text, Numeric, Table
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Text, Numeric, Table, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -141,6 +141,7 @@ class SalesOrder(Base):
     last_updated_by = Column(String)
     modified_fields = Column(JSONB, server_default='[]')
     last_status_change = Column(JSONB)
+    is_deleted = Column(Boolean, default=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Backoffice Fields
@@ -176,24 +177,36 @@ class RolePermission(Base):
     __tablename__ = "role_permissions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False, index=True)
     role = Column(String, nullable=False) # Enum: Super Admin, Administrador, etc.
     module = Column(String, nullable=False) # Ej: System, SalesTrack, Quality
     resource = Column(String, nullable=False) # Ej: users, campaigns, audits
     action = Column(String, nullable=False) # Ej: read, write, delete
+    name = Column(String) # Descriptive label for UI
     is_allowed = Column(Boolean, default=False)
 
-    # Unique constraint per role, resource, and action
-    # Index for fast lookup by role
+    # Unique constraint per role, resource, action, and tenant
+    __table_args__ = (
+        UniqueConstraint('role', 'resource', 'action', 'tenant_id', name='_role_resource_action_tenant_uc'),
+    )
+
+    # Relationship
+    organization = relationship("Organization")
 
 class RolePolicy(Base):
     __tablename__ = "role_policies"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False)
-    role = Column(String, nullable=False, unique=True) # Enum: Super Admin, etc.
+    role = Column(String, nullable=False) # Enum: Super Admin, etc.
     smart_routing_enabled = Column(Boolean, default=False)
     default_limit = Column(Numeric(10, 0), default=5)
     workable_statuses = Column(JSONB, server_default='["PENDIENTE"]') # Estatus que restan capacidad
+
+    # Unique constraint per role and tenant
+    __table_args__ = (
+        UniqueConstraint('role', 'tenant_id', name='_role_tenant_policy_uc'),
+    )
 
     # Relationships
     organization = relationship("Organization")

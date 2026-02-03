@@ -11,6 +11,7 @@ import {
     ArrowPathIcon,
     TableCellsIcon
 } from '@heroicons/react/24/outline';
+import { useToast } from '@/hooks/use-toast';
 
 interface SalesExportModalProps {
     isOpen: boolean;
@@ -19,6 +20,7 @@ interface SalesExportModalProps {
 }
 
 export default function SalesExportModal({ isOpen, onClose, scope }: SalesExportModalProps) {
+    const { toast } = useToast();
     const [campaigns, setCampaigns] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [exporting, setExporting] = useState(false);
@@ -41,7 +43,7 @@ export default function SalesExportModal({ isOpen, onClose, scope }: SalesExport
     const loadCampaigns = async () => {
         setLoading(true);
         try {
-            const data = await fetchFromAPI('/api/v1/campaigns/');
+            const data = await fetchFromAPI('/api/v1/selectors/campaigns');
             setCampaigns(data?.items || (Array.isArray(data) ? data : []));
         } catch (err) {
             console.error('Error loading campaigns:', err);
@@ -63,7 +65,7 @@ export default function SalesExportModal({ isOpen, onClose, scope }: SalesExport
             });
             if (campaignId) params.append('campaign_id', campaignId);
 
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL;
             const response = await fetch(`${apiUrl}/api/v1/sales/export?${params.toString()}`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
@@ -83,9 +85,16 @@ export default function SalesExportModal({ isOpen, onClose, scope }: SalesExport
             document.body.removeChild(a);
 
             onClose();
-        } catch (err) {
-            console.error('Export failed:', err);
-            alert('Error al generar el reporte.');
+            toast({
+                title: "Reporte Generado",
+                description: "La descarga ha comenzado correctamente.",
+            });
+        } catch (err: any) {
+            toast({
+                title: "Error de Exportación",
+                description: err.message || "No se pudo generar el reporte.",
+                variant: "destructive"
+            });
         } finally {
             setExporting(false);
         }

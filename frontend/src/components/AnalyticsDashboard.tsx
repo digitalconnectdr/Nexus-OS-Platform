@@ -6,6 +6,10 @@ import AnalyticsExportModal from './analytics/AnalyticsExportModal';
 import OperationalEfficiency from './analytics/OperationalEfficiency';
 import BackofficeScorecard from './analytics/BackofficeScorecard';
 import { useDashboardFilters } from '@/hooks/useDashboardFilters';
+import { usePermission } from '@/hooks/usePermission';
+import { LockClosedIcon, UserGroupIcon, FunnelIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline';
+import { fetchFromAPI } from '@/lib/api';
+import { useEffect, useCallback } from 'react';
 
 type Tab = 'scorecard' | 'backoffice' | 'efficiency';
 
@@ -21,9 +25,41 @@ export default function AnalyticsDashboard() {
         setActiveTab
     } = useDashboardFilters();
 
-    const activeTab = (urlTab || 'scorecard') as Tab;
+    const { can, isLoading: permsLoading } = usePermission();
+
+    // Filter allowed tabs
+    const allowedTabs = [
+        { id: 'scorecard', label: 'Scorecard Agentes', perm: 'performance:scorecard' },
+        { id: 'backoffice', label: 'Digitación & Backoffice', perm: 'performance:backoffice' },
+        { id: 'efficiency', label: 'Eficiencia Operativa', perm: 'performance:efficiency' }
+    ].filter(tab => can('performance', tab.perm.split(':')[1]));
+
+    const activeTab = (urlTab || (allowedTabs[0]?.id || 'scorecard')) as Tab;
     const [subTab, setSubTab] = useState<'hierarchy' | 'campaign'>('hierarchy');
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
+    // Filter States
+    const [supervisorId, setSupervisorId] = useState('');
+    const [campaignId, setCampaignId] = useState('');
+    const [supervisors, setSupervisors] = useState<any[]>([]);
+    const [campaigns, setCampaigns] = useState<any[]>([]);
+
+    const loadFilters = useCallback(async () => {
+        try {
+            const [supervisorsRes, campaignsRes] = await Promise.all([
+                fetchFromAPI('/api/v1/selectors/supervisors'),
+                fetchFromAPI('/api/v1/selectors/campaigns')
+            ]);
+            setSupervisors(Array.isArray(supervisorsRes) ? supervisorsRes : []);
+            setCampaigns(Array.isArray(campaignsRes) ? campaignsRes : []);
+        } catch (err) {
+            console.error("Error loading analytics master filters:", err);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadFilters();
+    }, [loadFilters]);
 
     // Extraemos el mes actual de la fecha de inicio para el componente de resultados
     const currentMonth = startDate.substring(0, 7); // Formato YYYY-MM
@@ -45,67 +81,55 @@ export default function AnalyticsDashboard() {
 
     return (
         <div className="space-y-6 max-w-[1600px] mx-auto animate-fade-in">
-            <header className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-                <div className="flex-1">
-                    <h1 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Gestión del Desempeño</h1>
-                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.2em] mt-1 flex items-center gap-2">
-                        <span className="w-2 h-2 bg-blue-600 rounded-full animate-pulse" />
+            <header className="flex justify-between items-center mb-6">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight uppercase">Gestión del Desempeño</h1>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-1">
                         Analítica Avanzada & Control de KPIs
                     </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-4">
-                    {/* Search Bar */}
-                    <div className="relative group">
-                        <input
-                            type="text"
-                            placeholder="Buscar agente, campaña o supervisor..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="bg-white border border-slate-200 rounded-xl px-11 py-2.5 text-xs font-bold focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all w-[300px] shadow-sm outline-none placeholder:text-slate-300"
-                        />
-                        <svg className="w-4 h-4 text-slate-400 absolute left-4 top-3.5 group-focus-within:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                    </div>
-
-                    {/* Range Picker */}
-                    <div className="flex items-center gap-4 bg-white p-3 px-4 rounded-xl border border-slate-200 shadow-sm">
-                        <div className="flex items-center gap-3 border-r border-slate-100 pr-4">
-                            <div>
-                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Desde</p>
+                <div className="flex items-center gap-4">
+                    {/* Global Date Range */}
+                    <div className="flex items-center gap-3 bg-white dark:bg-slate-900 p-2 px-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                        <div className="flex items-center gap-3">
+                            <div className="flex flex-col">
+                                <span className="text-[8px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none mb-1">Desde</span>
                                 <input
                                     type="date"
                                     value={startDate}
                                     onChange={(e) => setStartDate(e.target.value)}
-                                    className="text-[10px] font-bold text-slate-900 bg-transparent border-none p-0 focus:ring-0 cursor-pointer uppercase"
+                                    className="text-[10px] font-bold text-slate-900 dark:text-slate-100 bg-transparent border-none p-0 focus:ring-0 cursor-pointer uppercase"
                                 />
                             </div>
                         </div>
+                        <div className="w-px h-8 bg-slate-100 dark:bg-slate-800 mx-1" />
                         <div className="flex items-center gap-3">
-                            <div>
-                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Hasta</p>
+                            <div className="flex flex-col">
+                                <span className="text-[8px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none mb-1">Hasta</span>
                                 <input
                                     type="date"
                                     value={endDate}
                                     onChange={(e) => setEndDate(e.target.value)}
-                                    className="text-[10px] font-bold text-slate-900 bg-transparent border-none p-0 focus:ring-0 cursor-pointer uppercase"
+                                    className="text-[10px] font-bold text-slate-900 dark:text-slate-100 bg-transparent border-none p-0 focus:ring-0 cursor-pointer uppercase"
                                 />
                             </div>
                         </div>
                     </div>
 
                     {/* Export Trigger */}
-                    <button
-                        onClick={() => setIsExportModalOpen(true)}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white p-3 rounded-xl shadow-lg shadow-emerald-100 transition-all group flex items-center gap-2 active:scale-95"
-                        title={`Exportar Reporte de ${getExportLabel()}`}
-                    >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        <span className="text-[10px] font-black uppercase tracking-widest pr-1 hidden sm:inline">Reporte {getExportLabel()}</span>
-                    </button>
+                    {can('performance', 'reports') && (
+                        <button
+                            onClick={() => setIsExportModalOpen(true)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 h-10 rounded-xl shadow-lg shadow-emerald-100 dark:shadow-none transition-all group flex items-center gap-2 active:scale-95"
+                            title={`Exportar Reporte de ${getExportLabel()}`}
+                        >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            <span className="text-[10px] font-black uppercase tracking-widest">Reporte {getExportLabel()}</span>
+                        </button>
+                    )}
                 </div>
             </header>
 
@@ -117,24 +141,78 @@ export default function AnalyticsDashboard() {
                 mode={exportMode as any}
             />
 
-            <div className="flex border-b border-slate-200 gap-1 overflow-x-auto no-scrollbar">
-                {(['scorecard', 'backoffice', 'efficiency'] as Tab[]).map((tab) => (
+            <div className="flex border-b border-slate-200 dark:border-slate-800 gap-1 overflow-x-auto no-scrollbar">
+                {allowedTabs.map((tab) => (
                     <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as Tab)}
                         className={`px-8 py-3 text-[11px] font-bold uppercase tracking-widest transition-all relative
-                            ${activeTab === tab
-                                ? 'text-blue-600'
-                                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                            ${activeTab === tab.id
+                                ? 'text-blue-600 animate-in fade-in duration-300'
+                                : 'text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
                     >
-                        {tab === 'scorecard' ? 'Scorecard Agentes' :
-                            tab === 'backoffice' ? 'Digitación & Backoffice' : 'Eficiencia Operativa'}
+                        {tab.label}
 
-                        {activeTab === tab && (
+                        {activeTab === tab.id && (
                             <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 animate-in slide-in-from-left-full duration-300" />
                         )}
                     </button>
                 ))}
+            </div>
+
+            {/* Content Toolbar - Moved from Header */}
+            <div className="bg-slate-50/50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-4 flex-1">
+                    {/* Search Bar */}
+                    <div className="relative group flex-none">
+                        <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
+                        <input
+                            type="text"
+                            placeholder="Buscar agente o registro..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-[320px] pl-10 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900/20 outline-none transition-all placeholder:text-slate-300 dark:placeholder:text-slate-700 text-slate-900 dark:text-white"
+                        />
+                    </div>
+
+                    <div className="h-6 w-px bg-slate-200 dark:bg-slate-800" />
+
+                    {/* Master Filters (Supervisor / Campaign) */}
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Supervisor:</span>
+                            <select
+                                value={supervisorId}
+                                onChange={(e) => setSupervisorId(e.target.value)}
+                                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-[10px] font-bold text-slate-700 dark:text-slate-300 outline-none focus:ring-2 focus:ring-blue-500/20 uppercase cursor-pointer"
+                            >
+                                <option value="">Todos los Líderes</option>
+                                {supervisors.map(s => (
+                                    <option key={s.id} value={s.id}>{s.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Campaña:</span>
+                            <select
+                                value={campaignId}
+                                onChange={(e) => setCampaignId(e.target.value)}
+                                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-[10px] font-bold text-slate-700 dark:text-slate-300 outline-none focus:ring-2 focus:ring-blue-500/20 uppercase cursor-pointer"
+                            >
+                                <option value="">Todas las Campañas</option>
+                                {campaigns.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                        Filtros Activos: {(supervisorId || campaignId || searchTerm) ? 'SÍ' : 'NO'}
+                    </span>
+                </div>
             </div>
 
             {/* Tab Content */}
@@ -144,6 +222,8 @@ export default function AnalyticsDashboard() {
                         startDate={startDate}
                         endDate={endDate}
                         searchTerm={searchTerm}
+                        supervisorId={supervisorId}
+                        campaignId={campaignId}
                     />
                 )}
                 {activeTab === 'backoffice' && (
@@ -159,6 +239,8 @@ export default function AnalyticsDashboard() {
                         searchTerm={searchTerm}
                         subTab={subTab}
                         setSubTab={setSubTab}
+                        supervisorId={supervisorId}
+                        campaignId={campaignId}
                     />
                 )}
             </div>

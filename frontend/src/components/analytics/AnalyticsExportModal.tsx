@@ -10,6 +10,7 @@ import {
     Bars3CenterLeftIcon,
     UserGroupIcon
 } from '@heroicons/react/24/outline';
+import { useToast } from '@/hooks/use-toast';
 
 interface AnalyticsExportModalProps {
     isOpen: boolean;
@@ -20,6 +21,7 @@ interface AnalyticsExportModalProps {
 }
 
 export default function AnalyticsExportModal({ isOpen, onClose, currentStartDate, currentEndDate, mode = 'scorecard' }: AnalyticsExportModalProps) {
+    const { toast } = useToast();
     const [startDate, setStartDate] = useState(currentStartDate);
     const [endDate, setEndDate] = useState(currentEndDate);
     const [campaignId, setCampaignId] = useState('');
@@ -43,8 +45,8 @@ export default function AnalyticsExportModal({ isOpen, onClose, currentStartDate
             const campaignsRes = await fetchFromAPI('/api/v1/campaigns?size=100');
             setCampaigns(Array.isArray(campaignsRes) ? campaignsRes : (campaignsRes.items || []));
 
-            const supervisorsRes = await fetchFromAPI('/api/v1/users/?role=Supervisor&size=100');
-            setSupervisors(supervisorsRes.items || []);
+            const supervisorsRes = await fetchFromAPI('/api/v1/selectors/supervisors');
+            setSupervisors(Array.isArray(supervisorsRes) ? supervisorsRes : (supervisorsRes.items || []));
         } catch (err) {
             console.error("Error fetching export filters:", err);
         }
@@ -100,12 +102,16 @@ export default function AnalyticsExportModal({ isOpen, onClose, currentStartDate
             const { data: { session } } = await supabase.auth.getSession();
 
             if (!session) {
-                alert("Tu sesión ha expirado. Por favor recarga.");
+                toast({
+                    title: "Sesión Expirada",
+                    description: "Por favor, vuelva a iniciar sesión para continuar.",
+                    variant: "destructive"
+                });
                 setIsGenerating(false);
                 return;
             }
 
-            const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const baseUrl = process.env.NEXT_PUBLIC_API_URL;
             const exportUrlParams = mode === 'campaign-perf'
                 ? `month=${startDate.substring(0, 7)}`
                 : `start_date=${startDate}&end_date=${endDate}`;
@@ -146,6 +152,7 @@ export default function AnalyticsExportModal({ isOpen, onClose, currentStartDate
 
                 setIsGenerating(false);
                 setProgress(0);
+                toast({ title: "Reporte Descargado", description: "El archivo se ha generado con éxito." });
                 onClose();
             } else {
                 // ASYNC MODE: Start polling
@@ -159,16 +166,22 @@ export default function AnalyticsExportModal({ isOpen, onClose, currentStartDate
                     throw new Error('Unexpected response format');
                 }
             }
-        } catch (error) {
-            console.error('Download error:', error);
-            alert('Error al generar el reporte');
+        } catch (error: any) {
+            setIsGenerating(false);
+            setProgress(0);
+            toast({
+                title: "Error de Analytics",
+                description: error instanceof Error ? error.message : "Falla al procesar el reporte.",
+                variant: "destructive"
+            });
+        } finally {
             setIsGenerating(false);
             setProgress(0);
         }
     };
 
     const pollTaskStatus = (taskId: string, token: string) => {
-        const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const baseUrl = process.env.NEXT_PUBLIC_API_URL;
 
         const interval = setInterval(async () => {
             try {
@@ -200,7 +213,12 @@ export default function AnalyticsExportModal({ isOpen, onClose, currentStartDate
                     }, 1000);
                 } else if (data.status === 'failed') {
                     clearInterval(interval);
-                    alert(`Error: ${data.error || 'Unknown error'}`);
+                    toast({
+                        title: "Error de Generación",
+                        description: data.error || "El servidor no pudo completar el reporte.",
+                        variant: "destructive",
+                        duration: 10000
+                    });
                     setIsGenerating(false);
                     setProgress(0);
                     setTaskId(null);
@@ -297,7 +315,7 @@ export default function AnalyticsExportModal({ isOpen, onClose, currentStartDate
                                     >
                                         <option value="">Todos los Supervisores</option>
                                         {supervisors.map(s => (
-                                            <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>
+                                            <option key={s.id} value={s.id}>{s.name}</option>
                                         ))}
                                     </select>
                                 </div>

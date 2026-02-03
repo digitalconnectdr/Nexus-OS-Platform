@@ -5,36 +5,48 @@ from typing import List
 from app.api.deps import get_db
 from app.models.status import Status
 from app.schemas.core import StatusOut, StatusCreate
+from app.core.supabase import supabase_admin
+from app.core.security import get_current_user
+from app.models.core import UserProfile
 from uuid import UUID
 
+import logging
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.get("/", response_model=List[StatusOut])
 async def list_statuses(
+    include_inactive: bool = False,
     db: AsyncSession = Depends(get_db),
-    include_inactive: bool = False
+    current_user: UserProfile = Depends(get_current_user),
 ):
-    query = select(Status)
+    """Listado de estados vía SQL Directo"""
+    stmt = select(Status).where(Status.tenant_id == current_user.tenant_id)
     if not include_inactive:
-        query = query.where(Status.is_active == True)
+        stmt = stmt.where(Status.is_active == True)
     
-    result = await db.execute(query)
+    result = await db.execute(stmt)
     return result.scalars().all()
 
 @router.post("/", response_model=StatusOut)
 async def create_status(
     status_in: StatusCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user)
 ):
+    # Enforce tenant_id from current_user
+    status_data = status_in.model_dump()
+    status_data["tenant_id"] = current_user.tenant_id
+    
     if status_in.is_default:
         from sqlalchemy import update
         await db.execute(
             update(Status)
-            .where(Status.tenant_id == status_in.tenant_id)
+            .where(Status.tenant_id == current_user.tenant_id)
             .values(is_default=False)
         )
 
-    status = Status(**status_in.model_dump())
+    status = Status(**status_data)
     db.add(status)
     await db.commit()
     await db.refresh(status)
@@ -44,9 +56,13 @@ async def create_status(
 async def update_status(
     status_id: UUID,
     status_in: StatusCreate, # Reuse create schema for simplicity
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user)
 ):
-    result = await db.execute(select(Status).where(Status.id == status_id))
+    result = await db.execute(
+        select(Status)
+        .where(Status.id == status_id, Status.tenant_id == current_user.tenant_id)
+    )
     status = result.scalar_one_or_none()
     if not status:
         raise HTTPException(status_code=404, detail="Status not found")
@@ -70,17 +86,12 @@ async def update_status(
 @router.post("/bulk", response_model=List[StatusOut])
 async def bulk_save_statuses(
     statuses_in: List[dict],
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user)
 ):
     try:
-        # Get tenant_id from first item or default
-        tenant_id = None
-        if statuses_in:
-            tenant_id = statuses_in[0].get("tenant_id")
-        
-        if not tenant_id:
-            # Fallback or error
-            raise HTTPException(status_code=400, detail="Missing tenant_id in payload")
+        # Enforce tenant_id from current_user
+        tenant_id = current_user.tenant_id
 
         # Check if any status in the bulk request is set as default
         has_new_default = any(item.get("is_default") for item in statuses_in)
@@ -100,16 +111,18 @@ async def bulk_save_statuses(
             sid = item.get("id")
             if sid:
                 # Update
-                query = select(Status).where(Status.id == sid)
+                query = select(Status).where(Status.id == sid, Status.tenant_id == tenant_id)
                 result = await db.execute(query)
                 status = result.scalar_one_or_none()
                 if status:
                     for key, value in item.items():
                         if hasattr(status, key) and key != "id":
+                            if key == "tenant_id": continue # Prevent tenant manipulation
                             setattr(status, key, value)
                     results.append(status)
             else:
                 # Create
+                item["tenant_id"] = tenant_id # Enforce tenant
                 status = Status(**item)
                 db.add(status)
                 results.append(status)
@@ -121,14 +134,21 @@ async def bulk_save_statuses(
         return results
     except Exception as e:
         await db.rollback()
-        print(f"BULK STATUS ERROR: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"BULK STATUS ERROR: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Hubo un problema al procesar la actualización masiva de estados. Por favor, contacte a soporte. ||| TECH_DETAILS: {str(e)}"
+        )
 @router.delete("/{status_id}")
 async def delete_status(
     status_id: UUID,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user)
 ):
-    result = await db.execute(select(Status).where(Status.id == status_id))
+    result = await db.execute(
+        select(Status)
+        .where(Status.id == status_id, Status.tenant_id == current_user.tenant_id)
+    )
     status = result.scalar_one_or_none()
     if not status:
         raise HTTPException(status_code=404, detail="Status not found")

@@ -1,4 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Response
+from fastapi.encoders import jsonable_encoder
+import logging
+from app.core.supabase import supabase_admin
+
+logger = logging.getLogger(__name__)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, distinct, or_, func
 from sqlalchemy.orm import joinedload
@@ -6,7 +11,7 @@ from typing import List, Optional
 import csv
 import io
 from app.api.deps import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, check_permission
 from app.models.core import Product, Campaign, UserProfile
 from app.models.sales_goal import SalesGoal
 from app.schemas.core import ProductOut, ProductCreate, ProductUpdate, ProductSkillOption, PaginatedResponse
@@ -18,48 +23,56 @@ router = APIRouter()
 @router.get("/skills-manifest", response_model=List[ProductSkillOption])
 async def get_skills_manifest(
     db: AsyncSession = Depends(get_db),
-    current_user: UserProfile = Depends(get_current_user)
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("products", "read", module="config_products"))
 ):
-    """Returns a unique list of campaign > family labels for skills selection."""
-    query = (
-        select(
-            func.coalesce(Campaign.name, "SIN CAMPAÑA").label("camp_name"),
-            Product.family_name
+    """Genera el manifiesto de habilidades vía SQL Directo"""
+    try:
+        # Fetch products and campaigns
+        stmt = (
+            select(Product.family_name, Campaign.name.label("campaign_name"))
+            .join(Campaign, Product.campaign_id == Campaign.id)
+            .where(
+                Product.tenant_id == current_user.tenant_id,
+                Product.is_active == True
+            )
+            .distinct()
         )
-        .outerjoin(Campaign, Product.campaign_id == Campaign.id)
-        .where(
-            Product.tenant_id == current_user.tenant_id,
-            Product.is_active == True,
-            Product.family_name.isnot(None)
-        )
-        .distinct()
-        .order_by("camp_name", Product.family_name)
-    )
-    result = await db.execute(query)
-    
-    unique_skills = []
-    seen = set()
-    
-    for row in result.all():
-        camp_name = str(row[0]).strip().upper()
-        family = str(row[1]).strip().upper()
-        label = f"{camp_name} > {family}"
         
-        if label not in seen:
-            unique_skills.append({"label": label, "value": label})
-            seen.add(label)
-    
-    unique_skills.sort(key=lambda x: x["label"])
-    return unique_skills
+        result = await db.execute(stmt)
+        rows = result.all()
+        
+        unique_skills = []
+        seen = set()
+        
+        for row in rows:
+            family = row.family_name
+            if not family: continue
+            
+            camp_name = row.campaign_name.upper()
+            family = family.strip().upper()
+            label = f"{camp_name} > {family}"
+            
+            if label not in seen:
+                unique_skills.append({"label": label, "value": label})
+                seen.add(label)
+        
+        unique_skills.sort(key=lambda x: x["label"])
+        return unique_skills
+    except Exception as e:
+        logger.error(f"Error fetching skills manifest via SQL: {e}")
+        return []
 
 @router.get("/", response_model=PaginatedResponse[ProductOut])
 async def list_products(
     db: AsyncSession = Depends(get_db),
     params: CommonQueryParams = Depends(),
     include_inactive: bool = False,
-    campaign_id: Optional[UUID] = Query(None)
+    campaign_id: Optional[UUID] = Query(None),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("products", "read", module="config_products"))
 ):
-    query = select(Product).options(joinedload(Product.campaign))
+    query = select(Product).options(joinedload(Product.campaign)).where(Product.tenant_id == current_user.tenant_id)
     if not include_inactive:
         query = query.where(Product.is_active == True)
     
@@ -77,65 +90,102 @@ async def list_products(
 @router.post("/", response_model=ProductOut)
 async def create_product(
     product_in: ProductCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("products", "create", module="config_products"))
 ):
-    product_data = product_in.model_dump()
-    if product_data.get("family_name"):
-        product_data["family_name"] = product_data["family_name"].upper()
+    """Alta de producto vía SQL Directo"""
+    try:
+        product_data = product_in.model_dump()
+        if product_data.get("family_name"):
+            product_data["family_name"] = product_data["family_name"].upper()
         
-    product = Product(**product_data)
-    db.add(product)
-    await db.commit()
-    await db.refresh(product)
-    return product
+        # Inyectar Tenant ID
+        product_data["tenant_id"] = current_user.tenant_id
+        
+        db_product = Product(**product_data)
+        db.add(db_product)
+        await db.commit()
+        await db.refresh(db_product)
+        
+        return db_product
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error creating product via SQL: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error interno al crear el producto: {str(e)}")
 
 @router.put("/{product_id}", response_model=ProductOut)
 async def update_product(
     product_id: UUID,
     product_in: ProductUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("products", "update", module="config_products"))
 ):
-    result = await db.execute(select(Product).where(Product.id == product_id))
-    product = result.scalar_one_or_none()
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-    
-    update_data = product_in.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        if key == "family_name" and value:
-            value = value.upper()
-        setattr(product, key, value)
-    
-    await db.commit()
-    await db.refresh(product)
-    return product
+    """Actualización de producto vía SQL Directo"""
+    try:
+        stmt = select(Product).where(Product.id == product_id, Product.tenant_id == current_user.tenant_id)
+        result = await db.execute(stmt)
+        db_product = result.scalar_one_or_none()
+        
+        if not db_product:
+            raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+        update_data = product_in.model_dump(exclude_unset=True)
+        if "family_name" in update_data and update_data["family_name"]:
+            update_data["family_name"] = update_data["family_name"].upper()
+
+        for field, value in update_data.items():
+            setattr(db_product, field, value)
+
+        await db.commit()
+        await db.refresh(db_product)
+        return db_product
+    except HTTPException: raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error updating product via SQL: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error al actualizar producto: {str(e)}")
 
 @router.delete("/{product_id}")
 async def delete_product(
     product_id: UUID,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("products", "delete", module="config_products"))
 ):
-    result = await db.execute(select(Product).where(Product.id == product_id))
-    product = result.scalar_one_or_none()
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-    
-    # Soft delete (Logical Deletion)
-    product.is_active = False
-    await db.commit()
-    return {"status": "success", "message": "Product deactivated"}
+    """Soft delete vía SQL"""
+    try:
+        stmt = select(Product).where(Product.id == product_id, Product.tenant_id == current_user.tenant_id)
+        result = await db.execute(stmt)
+        db_product = result.scalar_one_or_none()
+        
+        if not db_product:
+            raise HTTPException(status_code=404, detail="Producto no encontrado")
+
+        db_product.is_active = False
+        await db.commit()
+        return {"status": "success", "message": "Producto desactivado correctamente"}
+    except HTTPException: raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error deleting product via SQL: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error al desactivar el producto: {str(e)}")
 
 @router.get("/families", response_model=List[str])
 async def list_product_families(
     campaign_id: UUID = Query(...),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("products", "read", module="config_products"))
 ):
     """Returns a DISTINCT list of family names for a campaign."""
     query = (
         select(distinct(func.coalesce(Product.family_name, "GENERAL")))
         .where(
             Product.campaign_id == campaign_id, 
-            Product.is_active == True
+            Product.is_active == True,
+            Product.tenant_id == current_user.tenant_id
         )
     )
     result = await db.execute(query)
@@ -146,14 +196,17 @@ async def list_product_families(
 async def list_product_names(
     campaign_id: UUID = Query(...),
     family_name: str = Query(...),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("products", "read", module="config_products"))
 ):
     """Returns a DISTINCT list of product names for a campaign and family."""
     query = (
         select(distinct(Product.name))
         .where(
             Product.campaign_id == campaign_id,
-            Product.is_active == True
+            Product.is_active == True,
+            Product.tenant_id == current_user.tenant_id
         )
     )
     # Normalizing family input for comparison
@@ -170,10 +223,19 @@ async def list_product_plans(
     db: AsyncSession = Depends(get_db),
     campaign_id: Optional[UUID] = Query(None),
     family_name: Optional[str] = Query(None),
-    product_name: Optional[str] = Query(None)
+    product_name: Optional[str] = Query(None),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("products", "read", module="config_products"))
 ):
     """Returns the list of specific items (plans) for a campaign, family and product."""
-    query = select(Product).options(joinedload(Product.campaign)).where(Product.is_active == True)
+    query = (
+        select(Product)
+        .options(joinedload(Product.campaign))
+        .where(
+            Product.is_active == True,
+            Product.tenant_id == current_user.tenant_id
+        )
+    )
     
     # Robust handling for FastAPI Query objects vs direct calls
     eff_camp_id = campaign_id if isinstance(campaign_id, UUID) else None
@@ -218,16 +280,17 @@ async def list_product_template():
 async def import_products(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    current_user: UserProfile = Depends(get_current_user)
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("products", "create", module="config_products"))
 ):
-    """Processes a CSV file to create or update products."""
+    """Procesa un archivo CSV para crear o actualizar productos vía SQL."""
     content = await file.read()
     try:
-        text = content.decode("utf-8-sig")
+        text_content = content.decode("utf-8-sig")
     except UnicodeDecodeError:
-        text = content.decode("latin-1")
+        text_content = content.decode("latin-1")
         
-    reader = csv.DictReader(io.StringIO(text))
+    reader = csv.DictReader(io.StringIO(text_content))
     
     results = {
         "total_processed": 0,
@@ -236,129 +299,99 @@ async def import_products(
         "errors": []
     }
     
-    campaign_result = await db.execute(select(Campaign).where(Campaign.tenant_id == current_user.tenant_id))
-    campaigns = {c.name.upper(): c.id for c in campaign_result.scalars().all()}
+    # Pre-cargar campañas de la organización
+    campaign_stmt = select(Campaign.id, Campaign.name).where(Campaign.tenant_id == current_user.tenant_id)
+    campaign_res = await db.execute(campaign_stmt)
+    campaigns = {c.name.upper(): c.id for c in campaign_res.all()}
     
-    # Pre-map headers to handle spaces/case variations
-    header_map = {}
-    if reader.fieldnames:
-        for f in reader.fieldnames:
-            clean_f = f.strip().lower()
-            header_map[clean_f] = f
+    header_map = {f.strip().lower(): f for f in (reader.fieldnames or [])}
 
     def get_val(row, clean_name, default=""):
         real_key = header_map.get(clean_name.lower())
-        if real_key:
-            return row.get(real_key, "").strip()
-        return default
+        return row.get(real_key, "").strip() if real_key else default
 
     for i, row in enumerate(reader, start=2):
         results["total_processed"] += 1
         try:
             camp_name = get_val(row, "Campaña")
             family = get_val(row, "Familia")
-            if family:
-                family = family.upper()
+            if family: family = family.upper()
             name = get_val(row, "Producto")
             concept = get_val(row, "Concepto Factura")
             plan = get_val(row, "Plan")
             pp = get_val(row, "Referencia PP")
             
-            # Strict price validation
             price_raw = get_val(row, "Precio", None)
-            if price_raw is None or price_raw == "":
-                raise ValueError("La columna 'Precio' no se encuentra o está vacía")
+            if not price_raw: raise ValueError("Columna 'Precio' vacía o faltante")
             
+            import math
             try:
                 price = float(price_raw)
-                import math
-                if not math.isfinite(price):
-                    raise ValueError(f"Precio '{price_raw}' no es un número finito")
-            except ValueError:
-                raise ValueError(f"Precio '{price_raw}' no es un número válido")
+                if not math.isfinite(price): raise ValueError("Precio no finito")
+            except ValueError: raise ValueError(f"Precio '{price_raw}' no es válido")
                 
-            # Incentive is optional in requirement but we want it valid if present
-            incentive_raw = get_val(row, "Incentivo", "0")
-            if incentive_raw == "": incentive_raw = "0"
+            incentive_raw = get_val(row, "Incentivo", "0") or "0"
             try:
                 incentive = float(incentive_raw)
-                if not math.isfinite(incentive):
-                    raise ValueError(f"Incentivo '{incentive_raw}' no es un número finito")
-            except ValueError:
-                raise ValueError(f"Incentivo '{incentive_raw}' no es un número válido")
+                if not math.isfinite(incentive): raise ValueError("Incentivo no finito")
+            except ValueError: raise ValueError(f"Incentivo '{incentive_raw}' no es válido")
             
-            if not camp_name:
-                raise ValueError("La Campaña es obligatoria")
-            if not name:
-                raise ValueError("El nombre del Producto es obligatorio")
-            if not pp:
-                raise ValueError("La Referencia PP es obligatoria")
+            if not camp_name: raise ValueError("Campaña obligatoria")
+            if not name: raise ValueError("Nombre de producto obligatorio")
+            if not pp: raise ValueError("Referencia PP obligatoria")
                 
             camp_id = campaigns.get(camp_name.upper())
-            if not camp_id:
-                raise ValueError(f"Campaña '{camp_name}' no encontrada")
+            if not camp_id: raise ValueError(f"Campaña '{camp_name}' no encontrada")
             
-            query = select(Product).where(
+            # Buscar producto existente
+            existing_stmt = select(Product).where(
                 Product.current_pp == pp,
                 Product.campaign_id == camp_id,
                 Product.tenant_id == current_user.tenant_id
             )
-            existing_result = await db.execute(query)
-            product = existing_result.scalar_one_or_none()
+            existing_res = await db.execute(existing_stmt)
+            db_product = existing_res.scalar_one_or_none()
             
-            if product:
-                product.campaign_id = camp_id
-                product.family_name = family
-                product.name = name
-                product.current_concept = concept
-                product.plan_name = plan
-                product.current_price = price
-                product.incentive = incentive
-                product.is_active = True  # Reactivate if it was soft-deleted
+            payload = {
+                "tenant_id": current_user.tenant_id,
+                "campaign_id": camp_id,
+                "family_name": family,
+                "name": name,
+                "current_concept": concept,
+                "plan_name": plan,
+                "current_pp": pp,
+                "current_price": price,
+                "incentive": incentive,
+                "is_active": True
+            }
+            
+            if db_product:
+                for key, value in payload.items():
+                    setattr(db_product, key, value)
             else:
-                product = Product(
-                    tenant_id=current_user.tenant_id,
-                    campaign_id=camp_id,
-                    family_name=family,
-                    name=name,
-                    current_concept=concept,
-                    plan_name=plan,
-                    current_pp=pp,
-                    current_price=price,
-                    incentive=incentive,
-                    is_active=True
-                )
-                db.add(product)
+                db_product = Product(**payload)
+                db.add(db_product)
             
-            await db.flush()
             results["success_count"] += 1
             
-        except ValueError as e:
-            results["error_count"] += 1
-            results["errors"].append({
-                "row": i,
-                "column": "Varias",
-                "message": str(e),
-                "value": str(row)
-            })
         except Exception as e:
             results["error_count"] += 1
-            results["errors"].append({
-                "row": i,
-                "column": "Sistema",
-                "message": "Error inesperado al procesar la fila",
-                "value": str(e)
-            })
+            results["errors"].append({"row": i, "message": str(e)})
             
-    if results["success_count"] > 0:
+    try:
         await db.commit()
+    except Exception as commit_err:
+        await db.rollback()
+        results["error_count"] = results["total_processed"]
+        results["errors"].append({"row": "GLOBAL", "message": f"Error al guardar cambios: {str(commit_err)}"})
         
     return results
 
 @router.get("/export")
 async def export_products(
     db: AsyncSession = Depends(get_db),
-    current_user: UserProfile = Depends(get_current_user)
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("products", "export", module="config_products"))
 ):
     """Exports all active products as a CSV file."""
     # --- AUDITORÍA: Registrar descarga ---
@@ -412,31 +445,55 @@ async def export_products(
 @router.post("/batch-delete")
 async def batch_delete_products(
     ids: List[UUID],
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("products", "delete", module="config_products"))
 ):
-    """Logically deletes multiple products."""
-    # Using a soft delete (setting is_active = False)
-    from sqlalchemy import update
-    query = update(Product).where(Product.id.in_(ids)).values(is_active=False)
-    result = await db.execute(query)
-    await db.commit()
-    return {"status": "success", "deleted_count": result.rowcount}
+    """Baja masiva lógica vía SQL."""
+    try:
+        from sqlalchemy import update
+        stmt = (
+            update(Product)
+            .where(Product.id.in_(ids), Product.tenant_id == current_user.tenant_id)
+            .values(is_active=False)
+            .returning(Product.id)
+        )
+        
+        response = await db.execute(stmt)
+        await db.commit()
+        
+        return {"status": "success", "deleted_count": len(response.all())}
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Error in batch delete via SQL: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error en eliminación masiva: {str(e)}")
 
 @router.get("/{product_id}", response_model=ProductOut)
 async def get_product(
     product_id: UUID,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("products", "read", module="config_products"))
 ):
-    result = await db.execute(select(Product).options(joinedload(Product.campaign)).where(Product.id == product_id))
+    result = await db.execute(
+        select(Product)
+        .options(joinedload(Product.campaign))
+        .where(Product.id == product_id)
+        .where(Product.tenant_id == current_user.tenant_id)
+    )
     product = result.scalar_one_or_none()
     if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
+        raise HTTPException(
+            status_code=404, 
+            detail="Producto no encontrado: El item solicitado no existe o no tiene permisos para visualizarlo."
+        )
     return product
 
 @router.get("/all-for-select")
 async def list_all_active_products_lite(
     db: AsyncSession = Depends(get_db),
-    current_user: UserProfile = Depends(get_current_user)
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("products", "read", module="config_products"))
 ):
     """Returns a lite, unpaginated list of all active products for UI selectors."""
     query = (

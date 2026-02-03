@@ -3,8 +3,10 @@
 import { useAnalytics } from '@/hooks/useAnalytics';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useToast } from '@/hooks/use-toast';
 
 export default function OperationalStats() {
+    const { toast } = useToast();
     const { metrics, isLoading, isError, filters } = useAnalytics();
     const [exportStatus, setExportStatus] = useState<'idle' | 'processing' | 'ready'>('idle');
     const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
@@ -45,14 +47,22 @@ export default function OperationalStats() {
                     setExportStatus('ready');
                 } else if (jobData.status === 'failed') {
                     clearInterval(intervalId);
-                    alert("Error al generar el reporte");
+                    toast({
+                        title: "Error de Reporte",
+                        description: "No se pudo generar el reporte estadístico.",
+                        variant: "destructive"
+                    });
                     setExportStatus('idle');
                 }
             }, 2000);
 
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
-            alert("Hubo un problema al conectar con el servidor de exportación.");
+            toast({
+                title: "Falla de Conexión",
+                description: e.message || "Hubo un problema al conectar con el servidor de exportación.",
+                variant: "destructive"
+            });
             setExportStatus('idle');
         }
     };
@@ -74,6 +84,10 @@ export default function OperationalStats() {
             </div>
         );
     }
+
+    // --- SAFE DATA NORMALIZATION ---
+    const campaignMetrics = metrics?.operations_metrics?.by_campaign || [];
+    const goalsCompliance = metrics?.goals_compliance || [];
 
     return (
         <div className="space-y-6">
@@ -120,8 +134,10 @@ export default function OperationalStats() {
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                     <h3 className="font-bold mb-4 text-slate-700 uppercase text-[10px] tracking-widest">Rendimiento por Campaña</h3>
 
-                    {metrics!.operations_metrics.by_campaign.length === 0 ? (
-                        <p className="text-slate-400 italic text-sm">No hay campañas activas en este periodo.</p>
+                    {campaignMetrics.length === 0 ? (
+                        <p className="text-slate-400 italic text-sm text-center py-10">
+                            No hay datos de campañas disponibles o no tienes permisos para verlos.
+                        </p>
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left">
@@ -133,7 +149,7 @@ export default function OperationalStats() {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-50">
-                                    {metrics!.operations_metrics.by_campaign.map((camp) => (
+                                    {campaignMetrics.map((camp) => (
                                         <tr key={camp.campaign_name} className="hover:bg-slate-50/50 transition-colors">
                                             <td className="px-4 py-4 font-bold text-slate-900">{camp.campaign_name}</td>
                                             <td className="px-4 py-4 text-right tabular-nums text-slate-500 font-medium">{camp.leads_generated}</td>
@@ -153,8 +169,8 @@ export default function OperationalStats() {
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
                     <h3 className="font-bold mb-4 text-slate-700 uppercase text-[10px] tracking-widest">Cumplimiento de Metas</h3>
                     <div className="space-y-3">
-                        {metrics!.goals_compliance.length > 0 ? (
-                            metrics!.goals_compliance.map((goal) => (
+                        {goalsCompliance.length > 0 ? (
+                            goalsCompliance.map((goal) => (
                                 <div key={goal.metric_name} className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100 hover:border-slate-200 transition-all">
                                     <span className="font-bold text-slate-700 text-sm">{goal.metric_name}</span>
                                     <span className={`px-3 py-1 text-[10px] rounded-full font-black uppercase tracking-widest ${goal.status === 'On Track' ? 'bg-emerald-100 text-emerald-700' :
@@ -165,7 +181,7 @@ export default function OperationalStats() {
                                 </div>
                             ))
                         ) : (
-                            <p className="text-slate-400 italic text-sm text-center py-10">No hay objetivos definidos.</p>
+                            <p className="text-slate-400 italic text-sm text-center py-10">No hay objetivos definidos o acceso limitado.</p>
                         )}
                     </div>
                 </div>

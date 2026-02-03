@@ -77,14 +77,17 @@ class RolePermissionOut(BaseModel):
     module: str
     resource: str
     action: str
+    name: Optional[str] = None
     is_allowed: bool
     model_config = ConfigDict(from_attributes=True)
 
 class PermissionToggle(BaseModel):
     target_role: UserRole
+    module: Optional[str] = None
     resource: str
     action: str
     value: bool
+    name: Optional[str] = None
 
 class CampaignSimple(BaseModel):
     id: UUID
@@ -154,3 +157,10 @@ class RolePolicyOut(RolePolicyBase):
     id: UUID
     tenant_id: UUID
     model_config = ConfigDict(from_attributes=True)
+
+# --- Auth Bootstrap ---
+class BootstrapResponse(BaseModel):
+    user: UserProfileOut
+    permissions: dict[str, bool]
+    tenant: Optional[OrganizationOut] = None
+    roles: List[str]

@@ -5,6 +5,7 @@ from sqlalchemy.orm import selectinload
 from typing import List
 from app.api.deps import get_db
 from app.models.sales_goal import SalesGoal
+from app.core.security import get_current_user, check_permission
 from app.models.core import UserProfile, Campaign
 from app.schemas.goal_schemas import SalesGoalResponse as MonthlyGoalOut, SalesGoalCreate as MonthlyGoalCreate, SalesGoalUpdate as MonthlyGoalUpdate, SalesGoalBulkCreate as MonthlyGoalBulkCreate
 from app.schemas.core import PaginatedResponse
@@ -16,13 +17,18 @@ router = APIRouter()
 @router.post("/bulk", response_model=List[MonthlyGoalOut])
 async def create_goals_bulk(
     goals_in: MonthlyGoalBulkCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("goals", "create", module="config_goals"))
 ):
     new_goals = []
     for goal_item in goals_in.items:
         goal_data = goal_item.model_dump()
         if goal_data.get("product_family"):
             goal_data["product_family"] = goal_data["product_family"].upper()
+            
+        if current_user.role != "Super Admin":
+            goal_data["tenant_id"] = current_user.tenant_id
             
         goal = SalesGoal(**goal_data)
         db.add(goal)
@@ -47,12 +53,15 @@ async def create_goals_bulk(
 async def list_goals(
     db: AsyncSession = Depends(get_db),
     params: CommonQueryParams = Depends(),
-    include_inactive: bool = False
+    include_inactive: bool = False,
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("goals", "read", module="config_goals"))
 ):
     query = (
         select(SalesGoal)
         .join(UserProfile, SalesGoal.user_id == UserProfile.id)
         .join(Campaign, SalesGoal.campaign_id == Campaign.id)
+        .where(SalesGoal.tenant_id == current_user.tenant_id)
         .where(UserProfile.is_deleted == False)
         .options(
             selectinload(SalesGoal.campaign).selectinload(Campaign.default_status),
@@ -87,11 +96,16 @@ async def list_goals(
 @router.post("/", response_model=MonthlyGoalOut)
 async def create_goal(
     goal_in: MonthlyGoalCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("goals", "create", module="config_goals"))
 ):
     goal_data = goal_in.model_dump()
     if goal_data.get("product_family"):
         goal_data["product_family"] = goal_data["product_family"].upper()
+        
+    if current_user.role != "Super Admin":
+        goal_data["tenant_id"] = current_user.tenant_id
         
     goal = SalesGoal(**goal_data)
     db.add(goal)
@@ -113,11 +127,14 @@ async def create_goal(
 async def update_goal(
     goal_id: UUID,
     goal_in: MonthlyGoalUpdate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("goals", "update", module="config_goals"))
 ):
     result = await db.execute(
         select(SalesGoal)
         .where(SalesGoal.id == goal_id)
+        .where(SalesGoal.tenant_id == current_user.tenant_id) # Isolation
         .options(
             selectinload(SalesGoal.campaign).selectinload(Campaign.default_status),
             selectinload(SalesGoal.agent),
@@ -126,7 +143,7 @@ async def update_goal(
     )
     goal = result.scalar_one_or_none()
     if not goal:
-        raise HTTPException(status_code=404, detail="Goal not found")
+        raise HTTPException(status_code=404, detail="Goal not found or access denied")
     
     update_data = goal_in.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -141,12 +158,18 @@ async def update_goal(
 @router.delete("/{goal_id}")
 async def delete_goal(
     goal_id: UUID,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("goals", "delete", module="config_goals"))
 ):
-    result = await db.execute(select(SalesGoal).where(SalesGoal.id == goal_id))
+    result = await db.execute(
+        select(SalesGoal)
+        .where(SalesGoal.id == goal_id)
+        .where(SalesGoal.tenant_id == current_user.tenant_id)
+    )
     goal = result.scalar_one_or_none()
     if not goal:
-        raise HTTPException(status_code=404, detail="Goal not found")
+        raise HTTPException(status_code=404, detail="Goal not found or access denied")
     # Soft delete (Logical Deletion)
     goal.is_active = False
     await db.commit()

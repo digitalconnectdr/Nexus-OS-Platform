@@ -14,7 +14,10 @@ from app.api.api_v1.endpoints.auth import router as auth_router
 # ESTE ES EL NUEVO (Tu archivo operational.py)
 from app.api.api_v1.endpoints.operational import router as operational_router
 from app.api.api_v1.endpoints.analytics import router as analytics_router
+from app.api.api_v1.endpoints.ops import router as ops_router
 from app.api.api_v1.endpoints.campaign_performance import router as campaign_performance_router
+from app.api.api_v1.endpoints.finance import router as finance_router
+from app.api.api_v1.endpoints.selectors import router as selectors_router
 
 api_router = APIRouter()
 
@@ -33,3 +36,6 @@ api_router.include_router(permissions_router, prefix="/permissions", tags=["perm
 api_router.include_router(operational_router, prefix="/results", tags=["results"])
 api_router.include_router(analytics_router, prefix="/analytics", tags=["analytics"])
 api_router.include_router(campaign_performance_router, prefix="/campaign-performance", tags=["campaign-performance"])
+api_router.include_router(finance_router, prefix="/finance", tags=["finance"])
+api_router.include_router(selectors_router, prefix="/selectors", tags=["selectors"])
+api_router.include_router(ops_router, prefix="/ops", tags=["ops"])

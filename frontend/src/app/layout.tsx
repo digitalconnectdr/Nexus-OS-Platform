@@ -16,6 +16,10 @@ import Sidebar from "@/components/Sidebar";
 import LayoutWrapper from "@/components/LayoutWrapper";
 import { AuthProvider } from "@/context/AuthContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { SWRProvider } from "@/components/SWRProvider";
+import { Toaster } from "@/components/ui/toaster";
+
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 export default function RootLayout({
   children,
@@ -23,17 +27,27 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
+    <html lang="es" suppressHydrationWarning>
       <body
-        className={`${inter.variable} font-sans antialiased bg-gray-50 text-gray-900`}
+        className={`${inter.variable} font-sans antialiased bg-background text-foreground transition-colors duration-300`}
       >
-        <ErrorBoundary>
-          <AuthProvider>
-            <LayoutWrapper>
-              {children}
-            </LayoutWrapper>
-          </AuthProvider>
-        </ErrorBoundary>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <ErrorBoundary>
+            <AuthProvider>
+              <SWRProvider>
+                <LayoutWrapper>
+                  {children}
+                  <Toaster />
+                </LayoutWrapper>
+              </SWRProvider>
+            </AuthProvider>
+          </ErrorBoundary>
+        </ThemeProvider>
       </body>
     </html>
   );

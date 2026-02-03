@@ -1,0 +1,58 @@
+[
+  {
+    "component": "Organizations",
+    "method": "GET",
+    "url": "/api/v1/organizations/",
+    "permission": "organizations:read",
+    "status": "VULNERABLE"
+  },
+  {
+    "component": "Organizations",
+    "method": "POST",
+    "url": "/api/v1/organizations/",
+    "permission": "organizations:write",
+    "status": "VULNERABLE"
+  },
+  {
+    "component": "Campaigns",
+    "method": "GET",
+    "url": "/api/v1/campaigns/",
+    "permission": "campaigns:read",
+    "status": "VULNERABLE"
+  },
+  {
+    "component": "Goals",
+    "method": "GET",
+    "url": "/api/v1/goals/",
+    "permission": "goals:read",
+    "status": "VULNERABLE"
+  },
+  {
+    "component": "Goals",
+    "method": "POST",
+    "url": "/api/v1/goals/",
+    "permission": "goals:write",
+    "status": "VULNERABLE"
+  },
+  {
+    "component": "Permissions",
+    "method": "GET",
+    "url": "/api/v1/permissions/",
+    "permission": "permissions:read",
+    "status": "VULNERABLE"
+  },
+  {
+    "component": "Permissions",
+    "method": "POST",
+    "url": "/api/v1/permissions/toggle",
+    "permission": "permissions:write",
+    "status": "VULNERABLE"
+  },
+  {
+    "component": "Policies",
+    "method": "GET",
+    "url": "/api/v1/policies/",
+    "permission": "policies:read",
+    "status": "VULNERABLE"
+  }
+]

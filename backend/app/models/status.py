@@ -14,3 +14,4 @@ class Status(Base):
     is_default = Column(Boolean, default=False)
     is_active_work = Column(Boolean, default=True, nullable=False) # Explicitly added as per user request
     is_productive = Column(Boolean, default=False, nullable=False) # Mark which statuses count as a "Sale"
+    scope = Column(String, default="DASHBOARD", nullable=False) # DASHBOARD | ARCHIVE

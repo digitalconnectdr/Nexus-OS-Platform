@@ -1,15 +1,35 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #111827;
   /* gray-900 for high contrast */
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --border: #e5e7eb;
+}
+
+.dark {
+  --background: #020617;
+  /* slate-950 */
+  --foreground: #f8fafc;
+  /* slate-50 */
+  --card: #0f172a;
+  /* slate-900 */
+  --card-foreground: #f8fafc;
+  --border: #1e293b;
+  /* slate-800 */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: "Calibri", "Segoe UI", sans-serif;
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --font-sans: "Inter", "Calibri", "Segoe UI", sans-serif;
   --font-mono: "Consolas", "Courier New", monospace;
 }
 

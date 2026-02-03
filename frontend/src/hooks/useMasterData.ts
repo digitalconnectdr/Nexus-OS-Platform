@@ -14,10 +14,10 @@ export function useMasterData() {
         async function loadAll() {
             try {
                 const [c, p, u, s] = await Promise.all([
-                    fetchFromAPI('/api/v1/campaigns/', { cache: 'no-store' }),
-                    fetchFromAPI('/api/v1/products/', { cache: 'no-store' }),
-                    fetchFromAPI('/api/v1/users/', { cache: 'no-store' }),
-                    fetchFromAPI('/api/v1/statuses/', { cache: 'no-store' }),
+                    fetchFromAPI('/api/v1/selectors/campaigns', { cache: 'no-store' }),
+                    fetchFromAPI('/api/v1/selectors/products', { cache: 'no-store' }),
+                    fetchFromAPI('/api/v1/selectors/supervisors', { cache: 'no-store' }), // Using supervisors as fallback for users in master data for agents
+                    fetchFromAPI('/api/v1/selectors/statuses', { cache: 'no-store' }),
                 ]);
                 setCampaigns(c);
                 setProducts(p);

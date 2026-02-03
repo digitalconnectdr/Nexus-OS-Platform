@@ -1,4 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
+import logging
+logger = logging.getLogger(__name__)
+from app.core.supabase import supabase_admin
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from typing import List, Dict
@@ -7,6 +10,27 @@ from app.models.core import RolePermission, UserProfile
 from app.schemas.core import RolePermissionOut, PermissionToggle, UserRole
 from app.core.security import check_permission, get_current_user
 import uuid
+
+# Canonical mapping for resource to module
+RESOURCE_MODULE_MAP = {
+    "users": "SYSTEM",
+    "campaigns": "SYSTEM",
+    "organizations": "SYSTEM",
+    "roles_matrix": "SYSTEM",
+    "audit_logs": "SYSTEM",
+    "sales": "SALES",
+    "goals": "SALES",
+    "products": "PRODUCTS",
+    "catalog": "PRODUCTS",
+    "finance": "FINANCE",
+    "payroll": "FINANCE",
+    "metrics": "FINANCE",
+    "history": "CHAT",
+    "conversations": "CHAT",
+    "scorecards": "QUALITY",
+    "evaluations": "QUALITY",
+    "commission_calculator": "ANALYTICS"
+}
 
 router = APIRouter()
 
@@ -19,36 +43,58 @@ async def get_mock_admin_user(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(UserProfile).where(UserProfile.role == UserRole.SUPER_ADMIN))
     admin = result.scalar_one_or_none()
     if not admin:
-         raise HTTPException(status_code=403, detail="Required Super Admin privileges")
+         raise HTTPException(
+             status_code=403, 
+             detail="Acceso denegado: Se requieren privilegios de Super Administrador para gestionar esta matriz."
+         )
     return admin
 
 @router.get("/", response_model=Dict[str, Dict[str, List[RolePermissionOut]]])
-async def list_permissions(db: AsyncSession = Depends(get_db)):
+async def list_permissions(
+    db: AsyncSession = Depends(get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("permissions", "read", module="policies"))
+):
     """
-    Returns the matrix grouped by Module -> Resource
+    Returns the matrix grouped by Module -> Resource for the user's organization.
     """
-    result = await db.execute(select(RolePermission))
+    stmt = select(RolePermission).where(RolePermission.tenant_id == current_user.tenant_id)
+    
+    # --- REGLA DE JERARQUÍA: VISIBILIDAD LIMITADA ---
+    # Si no soy Super Admin, solo puedo ver los permisos asignados a mi propio rol.
+    if current_user.role != UserRole.SUPER_ADMIN:
+        stmt = stmt.where(RolePermission.role == current_user.role)
+        
+    result = await db.execute(stmt)
     perms = result.scalars().all()
     
-    grouped = {}
-    for p in perms:
-        module = p.module
-        resource = p.resource
-        
-        if module not in grouped:
-            grouped[module] = {}
-        if resource not in grouped[module]:
-            grouped[module][resource] = []
+    try:
+        grouped = {}
+        for p in perms:
+            module = p.module
+            resource = p.resource
             
-        grouped[module][resource].append(RolePermissionOut.model_validate(p))
-        
-    return grouped
+            if module not in grouped:
+                grouped[module] = {}
+            if resource not in grouped[module]:
+                grouped[module][resource] = []
+                
+            grouped[module][resource].append(RolePermissionOut.model_validate(p))
+            
+        return grouped
+    except Exception as e:
+        logger.error(f"PERMISSIONS LIST ERROR: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al obtener la matriz de permisos. ||| TECH_DETAILS: {str(e)}"
+        )
 
-@router.post("/toggle")
-async def toggle_permission(
+@router.post("/toggle_status")
+async def toggle_status(
     toggle: PermissionToggle,
     db: AsyncSession = Depends(get_db),
-    # current_user: UserProfile = Depends(get_mock_admin_user) # Uncomment for strict RBAC
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("permissions", "update", module="policies"))
 ):
     """
     Updates the is_allowed value for a specific role, resource, and action.
@@ -57,30 +103,82 @@ async def toggle_permission(
     # [SIMULATED SECURITY CHECK]
     # In this dev phase, we assume the requester is the admin
     
-    query = select(RolePermission).where(
-        RolePermission.role == toggle.target_role,
-        RolePermission.resource == toggle.resource,
-        RolePermission.action == toggle.action
-    )
+    clean_role = toggle.target_role
+    clean_module = toggle.module.lower() if toggle.module else None
+    clean_resource = toggle.resource.lower()
+    clean_action = toggle.action.lower()
+    
+    from sqlalchemy import func
+    
+    # CRITICAL FIX: Lookup by Unique Constraint (Role + Resource + Action + Tenant)
+    filters = [
+        RolePermission.role == clean_role,
+        func.lower(RolePermission.resource) == clean_resource,
+        func.lower(RolePermission.action) == clean_action,
+        RolePermission.tenant_id == current_user.tenant_id
+    ]
+    
+    if clean_module:
+        filters.append(func.lower(RolePermission.module) == clean_module)
+
+    query = select(RolePermission).where(*filters)
     
     result = await db.execute(query)
     permission = result.scalar_one_or_none()
     
     if not permission:
-        raise HTTPException(status_code=404, detail="Permission record not found")
+        # Create new permission record if missing
+        permission = RolePermission(
+            id=uuid.uuid4(),
+            tenant_id=current_user.tenant_id,
+            role=clean_role,
+            resource=clean_resource,
+            action=clean_action,
+            module=clean_module or "system", # Use provided or default
+            name=toggle.name,
+            is_allowed=toggle.value
+        )
         
-    permission.is_allowed = toggle.value
-    await db.commit()
+        if not clean_module:
+            # Try to infer module from existing permissions of the same resource (case-insensitive)
+            mod_query = select(RolePermission.module).where(func.lower(RolePermission.resource) == clean_resource).limit(1)
+            mod_res = await db.execute(mod_query)
+            inferred_mod = mod_res.scalar_one_or_none()
+            if inferred_mod:
+                permission.module = inferred_mod.lower()
+            else:
+                # Fallback for known modules
+                permission.module = RESOURCE_MODULE_MAP.get(clean_resource, "system").lower()
+            
+        db.add(permission)
+    else:
+        permission.is_allowed = toggle.value
+        if toggle.name:
+            permission.name = toggle.name
+        if clean_module:
+             permission.module = clean_module
+        else:
+             permission.module = permission.module.lower()
+        
+    try:
+        await db.commit()
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"TOGGLE STATUS ERROR: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"No se pudo guardar el cambio de permiso. ||| TECH_DETAILS: {str(e)}"
+        )
     
-    return {"status": "success", "new_value": toggle.value}
+    # Minimal response to avoid unnecessary overhead or potential DB reads
+    return {"success": True, "message": "Updated"}
 
 @router.get("/me")
 async def get_my_permissions(
+    db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user)
 ):
-    """
-    Returns the current user's role and their granular permissions.
-    """
+    """Retorna los permisos del usuario actual vía SQL"""
     # 1. Base response
     resp = {
         "first_name": current_user.first_name,
@@ -94,10 +192,26 @@ async def get_my_permissions(
     if resp["is_super_admin"]:
         return resp
     
-    # 3. Use pre-loaded permissions from Eager Loading journey
-    for p in current_user.permissions:
-        # Format: "resource:action" -> is_allowed
-        key = f"{p.resource}:{p.action}"
-        resp["permissions"][key] = p.is_allowed
+    # 3. Fetch from DB
+    try:
+        stmt = select(RolePermission).where(
+            RolePermission.role == current_user.role,
+            RolePermission.tenant_id == current_user.tenant_id,
+            RolePermission.is_allowed == True
+        )
+        result = await db.execute(stmt)
+        perms = result.scalars().all()
+        
+        for p in perms:
+            # Full Tri-factor key: module:resource:action
+            full_key = f"{p.module}:{p.resource}:{p.action}"
+            resp["permissions"][full_key] = True
+            
+            # Legacy Fallback key: resource:action (for older components)
+            legacy_key = f"{p.resource}:{p.action}"
+            resp["permissions"][legacy_key] = True
+            
+    except Exception as e:
+        logger.error(f"Error fetching permissions via SQL: {e}", exc_info=True)
         
     return resp

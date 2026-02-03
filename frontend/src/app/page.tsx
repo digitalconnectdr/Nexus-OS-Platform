@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react';
 import DashboardRealTime from '@/components/DashboardRealTime';
 import OperationalStats from '@/components/dashboard/OperationalStats';
 
+import LoadingState from '@/components/ui/LoadingState';
+
 export default function HomePage() {
   const [mounted, setMounted] = useState(false);
 
@@ -12,11 +14,7 @@ export default function HomePage() {
   }, []);
 
   if (!mounted) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-gray-100">
-        <p className="text-gray-500 font-medium">Iniciando sistema...</p>
-      </div>
-    );
+    return <LoadingState message="Iniciando sistema..." fullScreen={true} />;
   }
 
   return (

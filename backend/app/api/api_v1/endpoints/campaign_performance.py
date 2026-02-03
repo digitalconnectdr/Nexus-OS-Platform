@@ -10,7 +10,8 @@ import csv
 import io
 
 from app.api import deps
-from app.models import Campaign, Product, SalesOrder, SalesGoal
+from app.models import Campaign, Product, SalesOrder, SalesGoal, Status, UserProfile
+from app.api.deps import get_db
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -44,85 +45,145 @@ def get_prev_month(month_str: str) -> str:
         return f"{year-1}-12"
     return f"{year}-{month-1:02d}"
 
+from app.core.security import get_current_user, check_permission
+from app.models.core import UserProfile
+from app.core.security import get_current_user, check_permission
+from app.models.core import UserProfile
+
 @router.get("/")
 async def get_campaign_performance(
     month: str = Query(..., description="Format YYYY-MM"),
-    db: AsyncSession = Depends(deps.get_db)
+    current_user: UserProfile = Depends(get_current_user),
+    db: AsyncSession = Depends(deps.get_db),
+    _: bool = Depends(check_permission("performance", "read", module="performance"))
 ):
-    prev_month = get_prev_month(month)
+    """VERSION DB DIRECT - Bypass REST API"""
+    logger.info(f"📊 Loading campaign performance via SQL for {month} (Tenant: {current_user.tenant_id})")
     
-    # Rango de fechas para el mes actual
+    tenant_id = str(current_user.tenant_id)
+
     try:
+        # 1. Obtener Metadatos (Campañas y Productos) - FILTRADOS POR TENANT
+        camp_stmt = select(Campaign.id, Campaign.name).where(Campaign.tenant_id == current_user.tenant_id)
+        camp_res = await db.execute(camp_stmt)
+        campaigns_meta = {str(c.id): c.name for c in camp_res.all()}
+
+        prod_stmt = select(Product.id, Product.name, Product.campaign_id).where(Product.tenant_id == current_user.tenant_id)
+        prod_res = await db.execute(prod_stmt)
+        products_meta = {str(p.id): {"name": p.name, "cid": str(p.campaign_id)} for p in prod_res.all()}
+
+        # 2. Rango de fechas
         year, m_num = map(int, month.split('-'))
-        start_date = datetime(year, m_num, 1)
+        start_date = datetime(year, m_num, 1) # SQL alchemy handles datetime objects better than strings
         if m_num == 12:
             end_date = datetime(year + 1, 1, 1)
         else:
             end_date = datetime(year, m_num + 1, 1)
 
-        # Rango para el mes anterior
-        prev_year, pm_num = map(int, prev_month.split('-'))
-        prev_start = datetime(prev_year, pm_num, 1)
-        prev_end = start_date
+        # 0. Fetch Productive Statuses for this tenant
+        st_stmt = select(Status.name).where(Status.tenant_id == current_user.tenant_id, Status.is_productive == True)
+        st_res = await db.execute(st_stmt)
+        productive_names = st_res.scalars().all()
 
-        # 1. Obtener metadatos
-        camp_stmt = select(Campaign)
-        camp_res = await db.execute(camp_stmt)
-        campaigns_meta = {str(c.id): c.name for c in camp_res.scalars().all()}
+        if not productive_names:
+            return {"month": month, "campaigns": [], "products": []}
 
-        prod_stmt = select(Product)
-        prod_res = await db.execute(prod_stmt)
-        products_meta = {str(p.id): {"name": p.name, "cid": str(p.campaign_id)} for p in prod_res.scalars().all()}
-
-        # 2. Obtener Metas (Mes Actual)
-        goal_stmt = select(
-            SalesGoal.campaign_id,
-            SalesGoal.product_id,
-            func.sum(SalesGoal.target_amount).label('money'),
-            func.sum(SalesGoal.target_units).label('count')
-        ).where(SalesGoal.month == month).group_by(SalesGoal.campaign_id, SalesGoal.product_id)
-        goal_res = await db.execute(goal_stmt)
-        goals_data = goal_res.all()
-        logger.info(f"Metas encontradas para {month}: {len(goals_data)}")
-
-        # 3. Obtener Ventas (Mes Actual)
-        sales_stmt = select(
-            SalesOrder.campaign_id,
-            SalesOrder.product_id,
-            func.sum(SalesOrder.snapshot_price).label('money'),
-            func.count(SalesOrder.id).label('count')
-        ).where(
-            SalesOrder.created_at >= start_date,
-            SalesOrder.created_at < end_date,
-            SalesOrder.status == "Approved"
-        ).group_by(SalesOrder.campaign_id, SalesOrder.product_id)
+        # 3. Obtener Ventas (Mes Actual) - FILTRADAS POR TENANT Y ESTATUS PRODUCTIVOS
+        sales_stmt = select(SalesOrder.id, SalesOrder.campaign_id, SalesOrder.product_id, SalesOrder.snapshot_price, SalesOrder.agent_id)\
+            .where(
+                SalesOrder.tenant_id == current_user.tenant_id,
+                SalesOrder.is_deleted == False,
+                SalesOrder.created_at >= start_date,
+                SalesOrder.created_at < end_date,
+                SalesOrder.status.in_(productive_names)
+            )
+        
         sales_res = await db.execute(sales_stmt)
-        sales_data = sales_res.all()
-        logger.info(f"Ventas encontradas para {month}: {len(sales_data)}")
+        sales_data_raw = []
+        for r in sales_res.all():
+            sales_data_raw.append({
+                "id": str(r.id),
+                "campaign_id": str(r.campaign_id),
+                "product_id": str(r.product_id),
+                "snapshot_price": float(r.snapshot_price or 0),
+                "agent_id": str(r.agent_id)
+            })
 
-        # 4. Obtener Ventas (Mes Anterior)
-        prev_sales_stmt = select(
-            SalesOrder.campaign_id,
-            SalesOrder.product_id,
-            func.sum(SalesOrder.snapshot_price).label('money'),
-            func.count(SalesOrder.id).label('count')
-        ).where(
-            SalesOrder.created_at >= prev_start,
-            SalesOrder.created_at < prev_end,
-            SalesOrder.status == "Approved"
-        ).group_by(SalesOrder.campaign_id, SalesOrder.product_id)
-        prev_sales_res = await db.execute(prev_sales_stmt)
-        prev_sales_data = prev_sales_res.all()
-        logger.info(f"Ventas mes anterior encontradas para {prev_month}: {len(prev_sales_data)}")
+        # --- EXCLUDE ADMIN SALES ---
+        sales_raw = []
+        if sales_data_raw:
+            agent_ids = list(set([s['agent_id'] for s in sales_data_raw if s.get('agent_id')]))
+            if agent_ids:
+                # Optimized User Role Fetch
+                valid_agents_stmt = select(UserProfile.id, UserProfile.role).where(UserProfile.id.in_(agent_ids))
+                valid_agents_res = await db.execute(valid_agents_stmt)
+                valid_ids = {str(u.id) for u in valid_agents_res.all() if u.role not in ['Super Admin', 'Administrador']}
+                sales_raw = [s for s in sales_data_raw if s.get('agent_id') in valid_ids]
+            else:
+                sales_raw = []
 
-        # 5. Procesar Productos
+        # 4. Obtener Metas (Mes Actual) - FILTRADAS POR TENANT
+        goals_stmt = select(SalesGoal.campaign_id, SalesGoal.product_id, SalesGoal.target_amount, SalesGoal.target_units)\
+            .where(
+                SalesGoal.tenant_id == current_user.tenant_id,
+                SalesGoal.month == month
+            )
+        goals_res = await db.execute(goals_stmt)
+        goals_raw = []
+        for r in goals_res.all():
+            goals_raw.append({
+                "campaign_id": str(r.campaign_id),
+                "product_id": str(r.product_id),
+                "target_amount": float(r.target_amount or 0),
+                "target_units": int(r.target_units or 0)
+            })
+
+        # 5. Obtener Ventas (Mes Anterior) para el calculo de PACE
+        prev_month = get_prev_month(month)
+        py, pm = map(int, prev_month.split('-'))
+        ps_date = datetime(py, pm, 1)
+        pe_date = start_date
+        
+        ps_stmt = select(SalesOrder.campaign_id, SalesOrder.product_id, SalesOrder.snapshot_price)\
+            .where(
+                SalesOrder.tenant_id == current_user.tenant_id,
+                SalesOrder.is_deleted == False,
+                SalesOrder.created_at >= ps_date,
+                SalesOrder.created_at < pe_date,
+                SalesOrder.status.in_(productive_names)
+            )
+            
+        prev_sales_res = await db.execute(ps_stmt)
+        prev_sales_raw = []
+        for r in prev_sales_res.all():
+            prev_sales_raw.append({
+                "campaign_id": str(r.campaign_id),
+                "product_id": str(r.product_id),
+                "snapshot_price": float(r.snapshot_price or 0)
+            })
+
+        # --- PROCESAMIENTO ---
         products_perf = {}
         
+        # 0. Pre-llenado con TODOS los productos disponibles para que aparezcan en la tabla
+        for pid, meta in products_meta.items():
+            cid = meta["cid"]
+            key = f"{cid}_{pid}"
+            products_perf[key] = {
+                "id": pid,
+                "nombre": meta["name"],
+                "campaign_id": cid,
+                "logro_money": 0.0,
+                "logro_count": 0,
+                "objetivo_money": 0.0,
+                "objetivo_count": 0,
+                "prev_money": 0.0
+            }
+
         def get_p_entry(pid, cid):
-            # Usamos una clave combinada por si un producto se asocia a campañas distintas (teóricamente)
-            # Pero principalmente para capturar productos nulos agrupados por campaña
             key = f"{cid}_{pid}"
             if key not in products_perf:
+                # Fallback para productos no encontrados en metadatos (ej: eliminados)
                 meta = products_meta.get(pid)
                 name = meta["name"] if meta else ("General" if pid == "NONE" else "Producto Desconocido")
                 products_perf[key] = {
@@ -137,39 +198,37 @@ async def get_campaign_performance(
                 }
             return products_perf[key]
 
-        # Llenar con metas
-        for g in goals_data:
-            entry = get_p_entry(str(g.product_id) if g.product_id else "NONE", str(g.campaign_id))
-            entry["objetivo_money"] += float(g.money or 0)
-            entry["objetivo_count"] += int(g.count or 0)
+        # Metas
+        for g in goals_raw:
+            entry = get_p_entry(g.get('product_id') or "NONE", g['campaign_id'])
+            entry["objetivo_money"] += float(g.get('target_amount') or 0)
+            entry["objetivo_count"] += int(g.get('target_units') or 0)
 
-        # Llenar con ventas actuales
-        for s in sales_data:
-            entry = get_p_entry(str(s.product_id) if s.product_id else "NONE", str(s.campaign_id))
-            entry["logro_money"] += float(s.money or 0)
-            entry["logro_count"] += int(s.count or 0)
+        # Ventas actuales
+        for s in sales_raw:
+            entry = get_p_entry(s.get('product_id') or "NONE", s['campaign_id'])
+            entry["logro_money"] += float(s.get('snapshot_price') or 0)
+            entry["logro_count"] += 1
 
-        # Llenar con ventas anteriores
-        for ps in prev_sales_data:
-            entry = get_p_entry(str(ps.product_id) if ps.product_id else "NONE", str(ps.campaign_id))
-            entry["prev_money"] += float(ps.money or 0)
+        # Ventas anteriores
+        for ps in prev_sales_raw:
+            entry = get_p_entry(ps.get('product_id') or "NONE", ps['campaign_id'])
+            entry["prev_money"] += float(ps.get('snapshot_price') or 0)
 
-        # Calculamos métricas de producto
+        # Calculos finales productos
         final_products = []
         for p in products_perf.values():
             p["proy_money"] = round(calculate_projection(p["logro_money"], month), 2)
             p["proy_count"] = int(calculate_projection(p["logro_count"], month))
             p["cumplimiento_money"] = round((p["logro_money"] / p["objetivo_money"] * 100), 1) if p["objetivo_money"] > 0 else 0.0
             p["cumplimiento_count"] = round((p["logro_count"] / p["objetivo_count"] * 100), 1) if p["objetivo_count"] > 0 else 0.0
-            
             p["status"] = "Good"
             if p["cumplimiento_money"] < 80: p["status"] = "Critical"
             elif p["cumplimiento_money"] < 100: p["status"] = "Warning"
-            
             p["pace_diff"] = round(((p["proy_money"] - p["prev_money"]) / p["prev_money"] * 100), 1) if p["prev_money"] > 0 else 0.0
             final_products.append(p)
 
-        # 6. Procesar Campañas (Agregado)
+        # Agregación Campañas
         campaigns_perf = {}
         for p in final_products:
             cid = p["campaign_id"]
@@ -177,14 +236,8 @@ async def get_campaign_performance(
                 campaigns_perf[cid] = {
                     "id": cid,
                     "nombre": campaigns_meta.get(cid, "Campaña Desconocida"),
-                    "logro_money": 0.0,
-                    "logro_count": 0,
-                    "objetivo_money": 0.0,
-                    "objetivo_count": 0,
-                    "proy_money": 0.0,
-                    "proy_count": 0,
-                    "prev_money": 0.0,
-                    "product_count": 0
+                    "logro_money": 0.0, "logro_count": 0, "objetivo_money": 0.0, "objetivo_count": 0,
+                    "proy_money": 0.0, "proy_count": 0, "prev_money": 0.0
                 }
             c = campaigns_perf[cid]
             c["logro_money"] += p["logro_money"]
@@ -194,17 +247,14 @@ async def get_campaign_performance(
             c["proy_money"] += p["proy_money"]
             c["proy_count"] += p["proy_count"]
             c["prev_money"] += p["prev_money"]
-            c["product_count"] += 1
 
         final_campaigns = []
-        for cid, c in campaigns_perf.items():
+        for c in campaigns_perf.values():
             c["cumplimiento_money"] = round((c["logro_money"] / c["objetivo_money"] * 100), 1) if c["objetivo_money"] > 0 else 0.0
             c["cumplimiento_count"] = round((c["logro_count"] / c["objetivo_count"] * 100), 1) if c["objetivo_count"] > 0 else 0.0
-            
             c["status"] = "Good"
             if c["cumplimiento_money"] < 80: c["status"] = "Critical"
             elif c["cumplimiento_money"] < 100: c["status"] = "Warning"
-            
             c["pace_diff"] = round(((c["proy_money"] - c["prev_money"]) / c["prev_money"] * 100), 1) if c["prev_money"] > 0 else 0.0
             final_campaigns.append(c)
 
@@ -213,6 +263,10 @@ async def get_campaign_performance(
             "campaigns": final_campaigns,
             "products": final_products
         }
+
+    except Exception as e:
+        logger.error(f"Error en campaign performance (SQL): {str(e)}")
+        return {"error": str(e), "campaigns": [], "products": []}
 
     except Exception as e:
         logger.error(f"Error en campaign performance: {str(e)}")
@@ -224,11 +278,23 @@ async def get_campaign_performance(
 @router.get("/export")
 async def export_campaign_performance(
     month: str = Query(..., description="Format YYYY-MM"),
-    db: AsyncSession = Depends(deps.get_db)
+    current_user: UserProfile = Depends(get_current_user),
+    db: AsyncSession = Depends(deps.get_db),
+    _: bool = Depends(check_permission("performance", "export", module="performance"))
 ):
     """Genera un reporte CSV con el rendimiento de campañas y productos."""
     try:
-        data = await get_campaign_performance(month, db)
+        # Pass DB to the getter logic? No, get_campaign_performance is an Endpoint that depends on DB. 
+        # But we are calling it as a function. We can't do that if it uses Depends.
+        # We need to extract the logic to a helper function or allow passing DB.
+        # Since we modified get_campaign_performance signature to accept db via Depends, we can call it directly passing arguments?
+        # No, Depends only works when FastAPI calls it.
+        # Correction: We must extract the logic or refactor get_campaign_performance to allow optional db argument logic, 
+        # or simply duplicate logic/extract common private function.
+        # Given urgency, I will adapt get_campaign_performance to simply use the passed DB.
+        
+        # Wait, get_campaign_performance is an async def endpoint. Calling it directly requires passing dependencies manually.
+        data = await get_campaign_performance(month=month, current_user=current_user, db=db, _=True)
         
         if "error" in data:
             raise Exception(data["error"])

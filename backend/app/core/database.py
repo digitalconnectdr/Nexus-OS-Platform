@@ -2,24 +2,22 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
 from app.core.config import settings
 
-# 1. Crear el Engine (Optimizado para Supabase Free Tier - 15 conexiones max)
-# Estrategia: Pool pequeño + overflow + reciclaje agresivo
+# 1. Ajuste de URL para Transaction Pooler (Infraestructura)
+db_url = str(settings.DATABASE_URL)
+if ":5432" in db_url:
+    print("🔄 Cambiando puerto 5432 -> 6543 para compatibilidad IPv4/Supavisor")
+    db_url = db_url.replace(":5432", ":6543")
+
+# 2. Configuración del Engine compatible con Supavisor (Transaction Mode)
+# "statement_cache_size": 0 es la CLAVE para eliminar el error InvalidSQLStatementNameError
 engine = create_async_engine(
-    settings.DATABASE_URL,
-    echo=False,
-    future=True,
-    # Pool conservador para no exceder límite de Supabase
-    pool_size=5,           # Conexiones permanentes (reducido de 10)
-    max_overflow=8,        # Conexiones temporales (total max: 13, dejando margen)
-    pool_recycle=300,      # Reciclar cada 5 min (más agresivo que 30 min)
-    pool_pre_ping=True,    # Verificar conexiones antes de usar
-    pool_timeout=30,       # Timeout para obtener conexión del pool
+    db_url,
+    pool_size=20,          # Tamaño del Pool Local
+    max_overflow=10,       # Margen para picos
+    pool_pre_ping=True,    # Auto-curación de conexiones
+    pool_recycle=300,      # Rotación cada 5 min
     connect_args={
-        "statement_cache_size": 0,
-        "server_settings": {
-            "application_name": "ai_saas_platform",
-            "jit": "off"  # Desactivar JIT para queries más rápidos
-        }
+        "statement_cache_size": 0  # <--- ESTO DESACTIVA LOS PREPARED STATEMENTS
     }
 )
 
@@ -32,5 +30,5 @@ SessionLocal = sessionmaker(
     expire_on_commit=False,
 )
 
-# 3. DEFINIR BASE (Esto es lo que faltaba para arreglar el error)
+# 3. DEFINIR BASE
 Base = declarative_base()

@@ -80,3 +80,24 @@ class DashboardData(BaseModel):
     period_end: str
     operations_metrics: OperationsMetrics
     goals_compliance: List[GoalCompliance]
+
+# --- NUEVOS SCHEMAS PARA BACKOFFICE & SEGUIMIENTO ---
+
+class BackofficeUserMetric(BaseModel):
+    user_id: str
+    user_name: str
+    role: str
+    processed_count: int = 0
+    avg_lead_time_mins: float = 0.0
+    accuracy_rate: float = 0.0 # % con OS Madre/Hija
+    os_completed: int = 0
+
+class FollowUpUserMetric(BaseModel):
+    user_id: str
+    user_name: str
+    role: str
+    managed_count: int = 0
+    installed_count: int = 0
+    canceled_count: int = 0
+    conversion_rate: float = 0.0 # Instaladas / (Instaladas + Canceladas)
+    avg_closing_days: float = 0.0

@@ -6,11 +6,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 import csv
 import io
+import calendar
 
 # Importaciones del sistema
 from app.api import deps
-from app.core.security import get_current_user
-from app.models import User, SalesGoal, SalesOrder, Campaign
+from app.core.security import get_current_user, check_permission
+from app.models import User, SalesGoal, SalesOrder, Campaign, UserProfile, Status, Product
 from app.schemas.analytics import (
     EfficiencyResponse, 
     DashboardData
@@ -22,7 +23,8 @@ from app.lib.cache import cache_response
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-# Si alguna importación de schemas falla, avísame.
+
+import datetime
 from app.schemas.analytics import (
     EfficiencyResponse, 
     EfficiencySupervisorMetric, 
@@ -33,13 +35,16 @@ from app.schemas.analytics import (
     SupervisorMetric,
     GoalCompliance
 )
+
+from app.schemas.core import UserRole
 import datetime
 
-router = APIRouter()
-logger = logging.getLogger(__name__)
-
-# --- 1. CAMPAÑAS ---
-async def _get_campaign_data(session: AsyncSession, month: str, campaign_id: str = None) -> List[EfficiencyCampaignParentMetric]:
+# --- ROLE SCOPING ---
+HIGH_LEVEL_ROLES = [UserRole.SUPER_ADMIN, UserRole.ADMINISTRADOR, UserRole.GERENTE, UserRole.SUPERVISOR, UserRole.SUPERVISOR_SENIOR]
+async def _get_campaign_data(session: AsyncSession, month: str, tenant_id: str, campaign_id: str = None) -> List[EfficiencyCampaignParentMetric]:
+    if session is None:
+        logger.warning("⚠️ _get_campaign_data: DB Session is None, returning empty list")
+        return []
     stmt = (
         select(
             Campaign.id.label('campaign_id'),
@@ -48,8 +53,9 @@ async def _get_campaign_data(session: AsyncSession, month: str, campaign_id: str
             func.coalesce(func.sum(SalesOrder.snapshot_price), 0).label('sold_amount')
         )
         .select_from(Campaign)
-        .outerjoin(SalesGoal, (SalesGoal.campaign_id == Campaign.id) & (SalesGoal.month.like(f"{month}%")))
-        .outerjoin(SalesOrder, (SalesOrder.campaign_id == Campaign.id) & (func.to_char(SalesOrder.created_at, 'YYYY-MM') == month))
+        .outerjoin(SalesGoal, (SalesGoal.campaign_id == Campaign.id) & (SalesGoal.month.like(f"{month}%")) & (SalesGoal.tenant_id == tenant_id))
+        .outerjoin(SalesOrder, (SalesOrder.campaign_id == Campaign.id) & (func.to_char(SalesOrder.created_at, 'YYYY-MM') == month) & (SalesOrder.tenant_id == tenant_id))
+        .where(Campaign.tenant_id == tenant_id)
         .group_by(Campaign.id, Campaign.name)
     )
     if campaign_id: stmt = stmt.filter(Campaign.id == campaign_id)
@@ -82,8 +88,18 @@ async def _get_campaign_data(session: AsyncSession, month: str, campaign_id: str
             continue
     return items
 
+
+
 # --- 2. SUPERVISORES ---
-async def _get_supervisor_data(session: AsyncSession, month: str, supervisor_id: str = None) -> List[EfficiencySupervisorMetric]:
+async def _get_supervisor_data(session: AsyncSession, month: str, tenant_id: str, supervisor_id: str = None, role_filter: str = '%supervisor%') -> List[EfficiencySupervisorMetric]:
+    """
+    Core function to retrieve supervisor/agent efficiency metrics.
+    NOW PURE SQL - No Fallback.
+    """
+    if session is None:
+        logger.error("❌ _get_supervisor_data: DB Session is None! Cannot fetch data.")
+        return []
+        
     stmt = (
         select(
             User.id.label('user_id'),
@@ -94,12 +110,22 @@ async def _get_supervisor_data(session: AsyncSession, month: str, supervisor_id:
             func.coalesce(func.sum(SalesOrder.snapshot_price), 0).label('sold_amount')
         )
         .select_from(User)
-        .outerjoin(SalesGoal, (SalesGoal.user_id == User.id) & (SalesGoal.month.like(f"{month}%")))
-        .outerjoin(SalesOrder, (SalesOrder.agent_id == User.id) & (func.to_char(SalesOrder.created_at, 'YYYY-MM') == month))
+        .outerjoin(SalesGoal, (SalesGoal.user_id == User.id) & (SalesGoal.month.like(f"{month}%")) & (SalesGoal.tenant_id == tenant_id))
+        .outerjoin(SalesOrder, (SalesOrder.agent_id == User.id) & (func.to_char(SalesOrder.created_at, 'YYYY-MM') == month) & (SalesOrder.tenant_id == tenant_id))
+        .where(User.tenant_id == tenant_id)
         .group_by(User.id, User.first_name, User.last_name, User.avatar_url)
     )
+    
+    # If supervisor_id is provided, filter by it (Explicit Filter)
+    if supervisor_id:
+        stmt = stmt.filter(User.id == supervisor_id)
+    else:
+        # Default view is for supervisors
+        if role_filter:
+            stmt = stmt.where(User.role.ilike(role_filter))
+        # If role_filter is None, we return all roles (agents, supervisors, etc.)
+
     stmt = stmt.having((func.sum(SalesGoal.target_amount) > 0) | (func.sum(SalesOrder.snapshot_price) > 0))
-    if supervisor_id: stmt = stmt.filter(User.id == supervisor_id)
 
     result = await session.execute(stmt)
     items = []
@@ -146,36 +172,62 @@ async def _get_supervisor_data(session: AsyncSession, month: str, supervisor_id:
     return items
 
 # --- 3. ENDPOINT ---
-@router.get("/efficiency-v3", response_model=EfficiencyResponse)
-@limiter.limit("20/minute")
-@cache_response(ttl_seconds=300)
+@router.get("/efficiency-v3")
 async def get_efficiency_data(
     request: Request,
-    month: str, view: str = 'supervisor',
-    supervisor_id: Optional[str] = Query(None), campaign_id: Optional[str] = Query(None),
-    db: AsyncSession = Depends(deps.get_db)
+    month: Optional[str] = Query(None),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    view: str = 'supervisor',
+    supervisor_id: Optional[str] = Query(None), 
+    campaign_id: Optional[str] = Query(None),
+    current_user: UserProfile = Depends(get_current_user),
+    db: AsyncSession = Depends(deps.get_db),
+    _: bool = Depends(check_permission("performance", "efficiency", module="performance"))
 ):
-    logger.info(f"Efficiency request received: month={month}, view={view}")
-    
-    # Respuesta por defecto vacía (SAFE)
-    resp = EfficiencyResponse(
-        month=month, total_supervisors=0, supervisors=[], campaigns_view=[], 
-        metadata_supervisors=[], metadata_campaigns=[], metadata_families=[]
-    )
+    """
+    Versión resiliente que acepta rango de fechas o mes.
+    """
+    # --- DATA SCOPE FILTERING (RLS) ---
+    if current_user.role not in HIGH_LEVEL_ROLES:
+        logger.info(f"🔒 RLS: Restricting efficiency view for {current_user.email}")
+        supervisor_id = str(current_user.id)
+        if view != 'supervisor':
+            logger.warning(f"⚠️ User {current_user.email} tried to access non-supervisor view. Forcing supervisor view.")
+            view = 'supervisor'
+
+    # Derivación de mes
+    target_month = month
+    if not target_month and start_date:
+        target_month = start_date[:7]
+    if not target_month:
+        target_month = datetime.datetime.now().strftime("%Y-%m")
+
     try:
         if view == 'campaign':
-            resp.campaigns_view = await _get_campaign_data(db, month, campaign_id)
+            data = await _get_campaign_data(db, target_month, str(current_user.tenant_id), campaign_id)
+            return {
+                "month": target_month,
+                "campaigns_view": data,
+                "supervisors": []
+            }
         else:
-            resp.supervisors = await _get_supervisor_data(db, month, supervisor_id)
-            resp.total_supervisors = len(resp.supervisors)
+            data = await _get_supervisor_data(db, target_month, str(current_user.tenant_id), supervisor_id)
+            return {
+                "month": target_month,
+                "supervisors": data,
+                "total_supervisors": len(data),
+                "campaigns_view": []
+            }
             
     except Exception as e:
-        logger.error(f"Analytics crash: {str(e)}")
-        # Importante: No lanzamos error, devolvemos respuesta vacía si explota todo
-        # O lanzamos un 500 limpio si prefieres
-        raise HTTPException(500, f"Error interno controlado: {str(e)}")
-    
-    return resp
+        logger.error(f"Efficiency crash: {str(e)}")
+        return {
+            "month": target_month,
+            "supervisors": [],
+            "campaigns_view": [],
+            "error": str(e)
+        }
 
 # --- 4. SCORECARD AGENTES ---
 @router.get("/scorecard/agents")
@@ -183,25 +235,280 @@ async def get_scorecard_agents(
     month: str,
     supervisor_id: Optional[str] = Query(None),
     campaign_id: Optional[str] = Query(None),
-    db: AsyncSession = Depends(deps.get_db)
+    current_user: UserProfile = Depends(get_current_user),
+    db: AsyncSession = Depends(deps.get_db),
+    _: bool = Depends(check_permission("performance", "scorecard", module="performance"))
 ):
     """
     Endpoint para el Scorecard 360 de Agentes.
     Retorna el desglose por agente, campaña y familia.
     """
-    # Por ahora reutilizamos la lógica de supervisores pero enfocada a agentes
-    # En el futuro esto puede ser un desglose más detallado con familias de productos
-    items = await _get_supervisor_data(db, month, supervisor_id)
+    # --- DATA SCOPE FILTERING (RLS) ---
+    # If restricted role, FORCE supervisor_id to be self
+    if current_user.role not in HIGH_LEVEL_ROLES:
+        logger.info(f"🔒 RLS: Restricting scorecard for {current_user.email}")
+        supervisor_id = str(current_user.id)
+
+    # --- DATA SCOPE FILTERING (RLS) ---
+    if current_user.role not in HIGH_LEVEL_ROLES:
+        logger.info(f"🔒 RLS: Restricting scorecard for {current_user.email}")
+        supervisor_id = str(current_user.id)
+
+    # Corregimos el paso de parámetros, solicitando explícitamente Representantes
+    # Para el scorecard de AGENTES, no queremos ver supervisores, sino representantes.
+    items = await _get_supervisor_data(db, month, str(current_user.tenant_id), supervisor_id=supervisor_id, role_filter='%Representante%')
     
     # El frontend espera: items, total, month, supervisors, campaigns
-    # Simulamos los filtros para que el frontend no rompa al hacer .map
+    supervisors = []
+    campaigns = []
+    
+    try:
+        # SQL MIGRATION: Fetch supervisors (any role containing "Supervisor")
+        # Direct SQL Connection (Port 6543) - No more REST API 500s
+        sup_stmt = select(User.id, User.first_name, User.last_name)\
+            .where(User.tenant_id == current_user.tenant_id)\
+            .where(User.role.ilike('%Supervisor%'))
+        sup_res = await db.execute(sup_stmt)
+        supervisors = [{"id": str(r.id), "name": f"{r.first_name} {r.last_name}"} for r in sup_res.all()]
+        
+        # Fetch active campaigns
+        camp_stmt = select(Campaign.id, Campaign.name)\
+            .where(Campaign.tenant_id == current_user.tenant_id)\
+            .where(Campaign.is_active == True)
+        camp_res = await db.execute(camp_stmt)
+        campaigns = [{"id": str(r.id), "name": r.name} for r in camp_res.all()]
+    except Exception as e:
+        logger.warning(f"⚠️ Error fetching filters for scorecard (SQL): {e}")
+
     return {
         "items": items,
         "total": len(items),
         "month": month,
-        "supervisors": [], # TODO: Poblar con supervisores reales para los filtros
-        "campaigns": []    # TODO: Poblar con campañas reales para los filtros
+        "supervisors": supervisors,
+        "campaigns": campaigns
     }
+
+# --- 5. SCORECARD BACKOFFICE (DIGITACIÓN) ---
+@router.get("/scorecard/backoffice")
+async def get_scorecard_backoffice(
+    month: str,
+    current_user: UserProfile = Depends(get_current_user),
+    db: AsyncSession = Depends(deps.get_db),
+    _: bool = Depends(check_permission("performance", "backoffice", module="performance"))
+):
+    """Mide eficiencia y precisión del equipo con rol 'Digitacion'"""
+    try:
+        # 1. Obtener usuarios ACTIVOS:
+        # SQL Direct Migration
+        digit_stmt = select(User.id, User.first_name, User.last_name, User.role)\
+            .where(User.tenant_id == current_user.tenant_id)\
+            .where(User.is_active == True)\
+            .where(User.role.in_(['Digitacion', 'Digitación', UserRole.DIGITACION.value]))
+        
+        digit_res = await db.execute(digit_stmt)
+        digitizers = [{"id": str(r.id), "first_name": r.first_name, "last_name": r.last_name, "role": r.role} for r in digit_res.all()]
+        
+        # 2. Obtener órdenes del mes (Dynamic Range)
+        # Convert to datetime for SQL compliance
+        start_ts = datetime.datetime.strptime(f"{month}-01 00:00:00", "%Y-%m-%d %H:%M:%S")
+        year, month_int = map(int, month.split("-"))
+        last_day = calendar.monthrange(year, month_int)[1]
+        end_ts = datetime.datetime.strptime(f"{month}-{last_day:02d} 23:59:59", "%Y-%m-%d %H:%M:%S")
+
+        sales_stmt = select(SalesOrder.agent_id, SalesOrder.digitizer_id, SalesOrder.status, SalesOrder.created_at, SalesOrder.updated_at, SalesOrder.os_madre, SalesOrder.os_hija)\
+            .where(SalesOrder.tenant_id == current_user.tenant_id)\
+            .where(SalesOrder.created_at >= start_ts)\
+            .where(SalesOrder.created_at <= end_ts)
+            
+        sales_res = await db.execute(sales_stmt)
+        # Convert SQLAlchemy rows to partial dicts for logic compatibility
+        sales = []
+        for r in sales_res.all():
+             sales.append({
+                 "agent_id": str(r.agent_id),
+                 "digitizer_id": str(r.digitizer_id) if r.digitizer_id else None,
+                 "status": r.status,
+                 "created_at": r.created_at.isoformat() if r.created_at else None,
+                 "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+                 "os_madre": r.os_madre,
+                 "os_hija": r.os_hija
+             })
+
+        # 3. Identificar TODOS los usuarios ACTIVOS con actividad (digitizer_id)
+        active_digitizer_ids = {s['digitizer_id'] for s in sales if s.get('digitizer_id')}
+        known_ids = {u['id'] for u in digitizers}
+        missing_ids = active_digitizer_ids - known_ids
+        
+        if missing_ids:
+            # SQL Fetch missing
+            missing_stmt = select(User.id, User.first_name, User.last_name, User.role)\
+                .where(User.id.in_(list(missing_ids)))\
+                .where(User.is_active == True)
+            missing_res = await db.execute(missing_stmt)
+            functional_digitizers = [{"id": str(r.id), "first_name": r.first_name, "last_name": r.last_name, "role": r.role} for r in missing_res.all()]
+            # Merge lists
+            users = digitizers + functional_digitizers
+        else:
+            users = digitizers
+        
+        # Remove duplicates just in case
+        users_map = {u['id']: u for u in users}
+        users = list(users_map.values())
+        
+        metrics = []
+        for u in users:
+            u_id = u['id']
+            # Ventas procesadas: donde el usuario es el digitador asignado
+            u_sales = [s for s in sales if s['digitizer_id'] == u_id]
+            
+            processed_count = len(u_sales)
+            os_completed = len([s for s in u_sales if s.get('os_madre') and s.get('os_hija')])
+            accuracy = (os_completed / processed_count * 100) if processed_count > 0 else 0.0
+            
+            # Lead Time: Diferencia entre creación (agente) y actualización (backoffice)
+            # Solo para las que ya tienen algo avanzado (status != inicial)
+            times = []
+            for s in u_sales:
+                try:
+                    c_at = datetime.datetime.fromisoformat(s['created_at'].replace('Z', '+00:00')) if s['created_at'] else None
+                    u_at = datetime.datetime.fromisoformat(s['updated_at'].replace('Z', '+00:00')) if s['updated_at'] else None
+                    if c_at and u_at:
+                        diff = (u_at - c_at).total_seconds() / 60.0 # minutos
+                        if diff > 0: times.append(diff)
+                except: continue
+            
+            avg_lt = (sum(times) / len(times)) if times else 0.0
+            
+            metrics.append({
+                "user_id": str(u_id),
+                "user_name": f"{u.get('first_name', 'User')} {u.get('last_name', 'X')}",
+                "role": u.get('role', 'Digitacion'),
+                "processed_count": processed_count,
+                "avg_lead_time_mins": round(avg_lt, 1),
+                "accuracy_rate": round(accuracy, 1),
+                "os_completed": os_completed
+            })
+            
+        return metrics
+    except Exception as e:
+        logger.error(f"Error in backoffice scorecard: {e}")
+        raise HTTPException(500, detail=str(e))
+
+# --- 6. SCORECARD SEGUIMIENTO ---
+@router.get("/scorecard/followup")
+async def get_scorecard_followup(
+    month: str,
+    current_user: UserProfile = Depends(get_current_user),
+    db: AsyncSession = Depends(deps.get_db),
+    _: bool = Depends(check_permission("performance", "scorecard", module="performance"))
+):
+    """Mide conversión y resolución del equipo con rol 'Seguimiento'"""
+    try:
+        # 1. Usuarios Seguimiento ACTIVOS:
+        # SQL Migration
+        spec_stmt = select(User.id, User.first_name, User.last_name, User.role)\
+            .where(User.tenant_id == current_user.tenant_id)\
+            .where(User.is_active == True)\
+            .where(User.role.in_(['Seguimiento', UserRole.SEGUIMIENTO.value]))
+        
+        spec_res = await db.execute(spec_stmt)
+        specialists = [{"id": str(r.id), "first_name": r.first_name, "last_name": r.last_name, "role": r.role} for r in spec_res.all()]
+        
+        # 2. Órdenes del mes (Dynamic Range)
+        # Convert to datetime for SQL compliance
+        start_ts = datetime.datetime.strptime(f"{month}-01 00:00:00", "%Y-%m-%d %H:%M:%S")
+        year, month_int = map(int, month.split("-"))
+        last_day = calendar.monthrange(year, month_int)[1]
+        end_ts = datetime.datetime.strptime(f"{month}-{last_day:02d} 23:59:59", "%Y-%m-%d %H:%M:%S")
+        
+        # Obtener configuración de estatus para este tenant
+        # SQL Migration for Statuses
+        stat_stmt = select(Status.name, Status.is_productive, Status.scope)\
+            .where(Status.tenant_id == current_user.tenant_id)
+        stat_res = await db.execute(stat_stmt)
+        status_cfg = [{"name": r.name, "is_productive": r.is_productive, "scope": r.scope} for r in stat_res.all()]
+        
+        productive_names = [s['name'] for s in status_cfg if s['is_productive']]
+        archive_names = [s['name'] for s in status_cfg if s['scope'] == 'ARCHIVE']
+        
+        # Sales Orders
+        sales_stmt = select(SalesOrder.digitizer_id, SalesOrder.status, SalesOrder.created_at, SalesOrder.updated_at)\
+            .where(SalesOrder.tenant_id == current_user.tenant_id)\
+            .where(SalesOrder.created_at >= start_ts)\
+            .where(SalesOrder.created_at <= end_ts)
+        sales_res = await db.execute(sales_stmt)
+        
+        sales = []
+        for r in sales_res.all():
+            sales.append({
+                "digitizer_id": str(r.digitizer_id) if r.digitizer_id else None,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "updated_at": r.updated_at.isoformat() if r.updated_at else None
+            })
+
+        # 3. Identificar TODOS los usuarios ACTIVOS con actividad
+        active_ids = {s['digitizer_id'] for s in sales if s.get('digitizer_id')}
+        known_ids = {u['id'] for u in specialists}
+        missing_ids = active_ids - known_ids
+        
+        if missing_ids:
+            # SQL Fetch
+            missing_stmt = select(User.id, User.first_name, User.last_name, User.role)\
+                .where(User.id.in_(list(missing_ids)))\
+                .where(User.is_active == True)
+            missing_res = await db.execute(missing_stmt)
+            functional_users = [{"id": str(r.id), "first_name": r.first_name, "last_name": r.last_name, "role": r.role} for r in missing_res.all()]
+            users = specialists + functional_users
+        else:
+            users = specialists
+            
+        # Remove duplicates
+        users_map = {u['id']: u for u in users}
+        users = list(users_map.values())
+        
+        metrics = []
+        for u in users:
+            u_id = u['id']
+            u_sales = [s for s in sales if s['digitizer_id'] == u_id]
+            
+            managed = len(u_sales)
+            # Definición dinámica: instaladas son las productivas, canceladas son las de archivo no productivas
+            installed = len([s for s in u_sales if s['status'] in productive_names])
+            canceled = len([s for s in u_sales if s['status'] in archive_names and s['status'] not in productive_names])
+            
+            total_closed = len([s for s in u_sales if s['status'] in archive_names])
+            conversion = (installed / total_closed * 100) if total_closed > 0 else 0.0
+            
+            # Tiempo de cierre promedio (días)
+            days = []
+            for s in u_sales:
+                if s['status'] in archive_names:
+                    try:
+                        c_at = datetime.datetime.fromisoformat(s['created_at'].replace('Z', '+00:00')) if s['created_at'] else None
+                        u_at = datetime.datetime.fromisoformat(s['updated_at'].replace('Z', '+00:00')) if s['updated_at'] else None
+                        if c_at and u_at:
+                            diff = (u_at - c_at).total_seconds() / 86400.0 # días
+                            days.append(diff)
+                    except: continue
+            
+            avg_days = (sum(days) / len(days)) if days else 0.0
+            
+            metrics.append({
+                "user_id": str(u_id),
+                "user_name": f"{u.get('first_name', 'User')} {u.get('last_name', 'X')}",
+                "role": u.get('role', 'Seguimiento'),
+                "managed_count": managed,
+                "installed_count": installed,
+                "canceled_count": canceled,
+                "conversion_rate": round(conversion, 1),
+                "avg_closing_days": round(avg_days, 1)
+            })
+            
+        return metrics
+    except Exception as e:
+        logger.error(f"Error in followup scorecard: {e}")
+        raise HTTPException(500, detail=str(e))
 
 @router.get("/scorecard/export")
 async def export_scorecard_data(
@@ -209,7 +516,9 @@ async def export_scorecard_data(
     end_date: str = Query(..., description="YYYY-MM-DD"),
     supervisor_id: str = Query(None, description="Filter by supervisor"),
     campaign_id: str = Query(None, description="Filter by campaign"),
-    db: AsyncSession = Depends(deps.get_db)
+    current_user: UserProfile = Depends(get_current_user),
+    db: AsyncSession = Depends(deps.get_db),
+    _: bool = Depends(check_permission("performance", "reports", module="performance"))
 ):
     """
     Genera un reporte CSV con datos del scorecard de agentes.
@@ -219,7 +528,7 @@ async def export_scorecard_data(
         month = start_date[:7]  # YYYY-MM
         
         # Obtener los datos del scorecard
-        items = await _get_supervisor_data(db, month, supervisor_id)
+        items = await _get_supervisor_data(db, month, str(current_user.tenant_id), supervisor_id)
         
         # Aplicar filtro de campaña si se proporciona (aunque el scorecard actual no filtra por campaña)
         # Este filtro se puede implementar en el futuro si es necesario
@@ -290,6 +599,7 @@ async def estimate_report_size(db: AsyncSession, report_type: str, params: dict)
                 LEFT JOIN sales_goals sg ON sg.user_id = u.id AND sg.month = :month
                 LEFT JOIN sales_orders so ON so.agent_id = u.id 
                     AND DATE_TRUNC('month', so.created_at) = :month::date
+                    AND so.is_deleted = false
                 WHERE (sg.id IS NOT NULL OR so.id IS NOT NULL)
                 """ + ("AND (u.id = :supervisor_id OR u.supervisor_id = :supervisor_id)" if supervisor_id else ""))
             
@@ -315,7 +625,7 @@ async def estimate_report_size(db: AsyncSession, report_type: str, params: dict)
             from sqlalchemy import text
             query = text("""
                 SELECT COUNT(*) FROM sales_orders
-                WHERE created_at >= :start_date AND created_at <= :end_date
+                WHERE created_at >= cast(:start_date as timestamp) AND created_at <= cast(:end_date as timestamp)
             """)
             result = await db.execute(query, {
                 'start_date': params.get('start_date'),
@@ -607,101 +917,131 @@ async def get_report_status(task_id: str):
 
 # --- 5. DASHBOARD PRINCIPAL ---
 @router.get("/dashboard", response_model=DashboardData)
-@limiter.limit("100/minute")
-@cache_response(ttl_seconds=300)
 async def get_dashboard_data(
     request: Request,
     start_date: str = Query(..., description="YYYY-MM-DD"),
     end_date: str = Query(..., description="YYYY-MM-DD"),
-    db: AsyncSession = Depends(deps.get_db)
+    current_user: UserProfile = Depends(get_current_user),
+    db: AsyncSession = Depends(deps.get_db),
+    _: bool = Depends(check_permission("operational", "read"))
 ):
     """
-    Endpoint principal para el Dashboard Real-Time.
-    Retorna métricas operativas y cumplimiento de metas.
+    VERSION SQL DIRECT - Bypass Cloudflare Logs
     """
-    logger.info(f"Dashboard metrics request: {start_date} to {end_date}")
+    logger.info(f"Dashboard metrics request (SQL): {start_date} to {end_date}")
     
     try:
-        # 0. Convertir strings a datetime para compatibilidad con la DB
-        try:
-            # start_date: YYYY-MM-DD
-            # end_date: YYYY-MM-DD
-            start_dt = datetime.datetime.strptime(start_date, "%Y-%m-%d")
-            # Para el end_date, lo llevamos al final del día (23:59:59)
-            end_dt = datetime.datetime.strptime(end_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59)
-        except ValueError as ve:
-            logger.error(f"Invalid date format: {ve}")
-            raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
-
-        # 1. Métricas por Campaña
-        # Contamos ventas por campaña en el rango de fechas
-        stmt_campaigns = (
-            select(
-                Campaign.name.label('campaign_name'),
-                func.count(SalesOrder.id).label('leads_generated')
-            )
-            .select_from(Campaign)
-            .outerjoin(SalesOrder, (SalesOrder.campaign_id == Campaign.id) & 
-                       (SalesOrder.created_at >= start_dt) & 
-                       (SalesOrder.created_at <= end_dt))
-            .group_by(Campaign.name)
-        )
+        # 1. Fetch only tenant-specific active campaigns
+        camp_stmt = select(Campaign.id, Campaign.name)\
+            .where(Campaign.tenant_id == current_user.tenant_id)\
+            .where(Campaign.is_active == True)
+        camp_res = await db.execute(camp_stmt)
+        campaigns = [{"id": str(r.id), "name": r.name} for r in camp_res.all()]
         
-        res_camp = await db.execute(stmt_campaigns)
+        # 2. Fetch sales counts by campaign
+        # Explicitly cast to datetime for PostgreSQL compliance
+        start_ts = datetime.datetime.strptime(f"{start_date} 00:00:00", "%Y-%m-%d %H:%M:%S")
+        end_ts = datetime.datetime.strptime(f"{end_date} 23:59:59", "%Y-%m-%d %H:%M:%S")
+        
+        # Optimized: Group by campaign_id in SQL
+        sales_stmt = select(SalesOrder.campaign_id, func.count(SalesOrder.id))\
+            .where(SalesOrder.tenant_id == current_user.tenant_id)\
+            .where(SalesOrder.is_deleted == False)\
+            .where(SalesOrder.created_at >= start_ts)\
+            .where(SalesOrder.created_at <= end_ts)\
+            .group_by(SalesOrder.campaign_id)
+            
+        sales_res = await db.execute(sales_stmt)
+        sales_count_map = {str(r[0]): r[1] for r in sales_res.all() if r[0]} # r[0] is campaign_id
+            
         campaign_metrics = []
-        for row in res_camp.all():
+        for c in campaigns:
+            c_id = c.get('id')
+            if not c_id: continue
+            
             campaign_metrics.append(CampaignMetric(
-                campaign_name=row.campaign_name,
-                leads_generated=row.leads_generated or 0,
-                conversion_rate=0.0, # TODO: Lógica de conversión real si hay leads vs ventas
+                campaign_name=c.get('name') or "Campaña Sin Nombre",
+                leads_generated=int(sales_count_map.get(c_id, 0)),
+                conversion_rate=0.0,
                 active=True
             ))
 
-        # 2. Cumplimiento de Metas
-        # Comparamos meta de ventas ($) vs venta real ($)
-        month_str = start_date[:7] # YYYY-MM
-        stmt_goals = (
-            select(
-                func.coalesce(func.sum(SalesGoal.target_amount), 0).label('target_amount'),
-                func.coalesce(func.sum(SalesOrder.snapshot_price), 0).label('sold_amount')
-            )
-            .select_from(SalesGoal)
-            .outerjoin(SalesOrder, (SalesGoal.user_id == SalesOrder.agent_id) & 
-                       (func.to_char(SalesOrder.created_at, 'YYYY-MM') == month_str))
-            .where(SalesGoal.month.like(f"{month_str}%"))
-        )
-        
-        res_goals = await db.execute(stmt_goals)
-        goal_row = res_goals.first()
-        
-        target = float(goal_row.target_amount) if goal_row else 0.0
-        current = float(goal_row.sold_amount) if goal_row else 0.0
-        
-        compliance = (current / target * 100) if target > 0 else 0.0
-        status = "On Track" if compliance >= 80 else "Risk" if compliance >= 50 else "Behind"
+        # 3. Goal Compliance (Simplified logic for dashboard)
+        month_str = start_date[:7]
+        try:
+            # Goals SQL
+            goal_stmt = select(func.sum(SalesGoal.target_amount))\
+                .where(SalesGoal.tenant_id == current_user.tenant_id)\
+                .where(SalesGoal.month.like(f"{month_str}%"))
+            goal_res = await db.execute(goal_stmt)
+            total_target = float(goal_res.scalar() or 0)
+            
+            # Sales SQL
+            val_stmt = select(func.sum(SalesOrder.snapshot_price))\
+                .where(SalesOrder.is_deleted == False)\
+                .where(SalesOrder.tenant_id == current_user.tenant_id)\
+                .where(SalesOrder.created_at >= start_ts)\
+                .where(SalesOrder.created_at <= end_ts) # Dashboard uses exact range? Logic said month_str% in old code for sales_val_res but created_at like month_str%?
+                # Old code: like('created_at', f"{month_str}%")
+                # But get_dashboard_data takes start/end date.
+                # If the dashboard shows "Monthly Compliance", it should respect the MONTH of the start_date.
+                # The old code used month_str for BOTH goals and sales.
+                # Let's replicate old logic: Sales for the WHOLE month
+            
+            # Replicating old logic: fetch sales for the MONTH of start_date
+            val_stmt = select(func.sum(SalesOrder.snapshot_price))\
+                .where(SalesOrder.is_deleted == False)\
+                .where(SalesOrder.tenant_id == current_user.tenant_id)\
+                .where(func.to_char(SalesOrder.created_at, 'YYYY-MM') == month_str)
+            
+            val_res = await db.execute(val_stmt)
+            total_sold = float(val_res.scalar() or 0)
+            
+            compliance = (total_sold / total_target * 100) if total_target > 0 else 0.0
+            
+            # Garantizar que el status sea exacto al Enum de Zod: 'On Track', 'Risk', 'Behind'
+            if compliance >= 80:
+                status = "On Track"
+            elif compliance >= 50:
+                status = "Risk"
+            else:
+                status = "Behind"
+                
+        except Exception as goal_e:
+            logger.warning(f"Error calculating goals (SQL): {goal_e}")
+            total_target = 0.0
+            total_sold = 0.0
+            status = "Behind"
         
         goal_compliance = [
             GoalCompliance(
                 metric_name="Meta Mensual Global",
-                target=target,
-                current=current,
+                target=float(total_target),
+                current=float(total_sold),
                 status=status
             )
         ]
 
         return DashboardData(
-            period_start=start_date,
-            period_end=end_date,
+            period_start=str(start_date),
+            period_end=str(end_date),
             operations_metrics=OperationsMetrics(
                 by_campaign=campaign_metrics,
-                by_supervisor=[] # Opcional por ahora para no recargar
+                by_supervisor=[]
             ),
             goals_compliance=goal_compliance
         )
         
     except Exception as e:
-        logger.error(f"Error generating dashboard data: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error generating dashboard data (SQL): {str(e)}")
+        # No queremos que el dashboard rompa el frontend, devolvemos algo seguro
+        return DashboardData(
+            period_start=start_date,
+            period_end=end_date,
+            operations_metrics=OperationsMetrics(by_campaign=[], by_supervisor=[]),
+            goals_compliance=[]
+        )
+
 
 # --- 6. EXPORT EFFICIENCY DATA ---
 @router.get("/efficiency-v3/export")
@@ -710,7 +1050,9 @@ async def export_efficiency_data(
     end_date: str = Query(..., description="YYYY-MM-DD"),
     supervisor_id: str = Query(None, description="Filter by supervisor"),
     campaign_id: str = Query(None, description="Filter by campaign"),
-    db: AsyncSession = Depends(deps.get_db)
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("operational", "export"))
 ):
     """
     Genera un reporte CSV con datos de eficiencia operativa.
@@ -809,3 +1151,140 @@ async def export_efficiency_data(
         logger.error(f"Error exporting efficiency data: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# --- 7. COMMISSION BOOSTER (NEW) ---
+from app.schemas.commission import CommissionProjectionResponse, CommissionTier, ProjectionScenario
+
+@router.get("/commission-projection", response_model=CommissionProjectionResponse)
+async def get_commission_projection(
+    current_user: UserProfile = Depends(get_current_user),
+    db: AsyncSession = Depends(deps.get_db),
+    _: bool = Depends(check_permission("commission_calculator", "view", module="analytics"))
+):
+    """
+    Calculates commission projection based on current month performance.
+    Dynamic Tiers:
+    - Bronze: 0-9 sales (5%)
+    - Silver: 10-19 sales (7%)
+    - Gold: 20+ sales (10%)
+    """
+    try:
+        # 1. Get Current Month
+        today = datetime.datetime.now()
+        month_str = today.strftime("%Y-%m")
+        start_date = today.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        # End date logic same as before
+        if today.month == 12:
+            end_date = today.replace(year=today.year+1, month=1, day=1)
+        else:
+            end_date = today.replace(month=today.month+1, day=1)
+            
+        # 2. Fetch User's Approved Sales (Productive Statuses)
+        # Assuming 'INSTALADA' or 'COMPLETADA' (We need to fetch IDs of these statuses for the tenant)
+        st_stmt = select(Status.name).where(Status.tenant_id == current_user.tenant_id, Status.is_productive == True)
+        st_res = await db.execute(st_stmt)
+        productive_names = st_res.scalars().all()
+        
+        if not productive_names:
+            # Fallback if no productive statuses configured
+            productive_names = ['INSTALADA', 'COMPLETADA', 'CONECTADO', 'EXITOSA']
+
+        # Query Sales (Strict filtering by current_user.id and tenant_id)
+        # Dates are handled as timestamps/datetimes (start_date, end_date)
+        stmt = select(SalesOrder.snapshot_price)\
+            .where(
+                SalesOrder.tenant_id == current_user.tenant_id,
+                SalesOrder.agent_id == current_user.id,
+                SalesOrder.is_deleted == False,
+                SalesOrder.created_at >= start_date,
+                SalesOrder.created_at < end_date,
+                SalesOrder.status.in_(productive_names)
+            )
+        result = await db.execute(stmt)
+        sales = [float(r or 0) for r in result.scalars().all()]
+        
+        count = len(sales)
+        total_value = sum(sales)
+        if count > 0:
+            avg_ticket = total_value / count
+        else:
+            try:
+                # Fallback: Average price of all active products for the tenant
+                prod_stmt = select(func.avg(Product.current_price)).where(
+                    Product.tenant_id == current_user.tenant_id,
+                    Product.is_active == True
+                )
+                prod_res = await db.execute(prod_stmt)
+                result = prod_res.scalar()
+                avg_ticket = float(result) if result is not None else 50.0
+            except Exception as e:
+                logger.error(f"Error calculating fallback avg_ticket: {e}")
+                avg_ticket = 50.0
+        
+        # 3. Define Tiers (Hardcoded for MVP, should be DB driven later)
+        tiers = [
+            {"name": "Bronze", "min": 0, "rate": 0.05},
+            {"name": "Silver", "min": 10, "rate": 0.07},
+            {"name": "Gold", "min": 20, "rate": 0.10}
+        ]
+        
+        # Determine Current Tier
+        current_tier_def = tiers[0]
+        next_tier_def = None
+        
+        for i, t in enumerate(tiers):
+            if count >= t["min"]:
+                current_tier_def = t
+                if i + 1 < len(tiers):
+                    next_tier_def = tiers[i+1]
+            else:
+                break
+                
+        current_commission = total_value * current_tier_def["rate"]
+        
+        # 4. Scenarios
+        scenarios = []
+        for extra in [1, 3, 5, 7, 10]:
+            new_count = count + extra
+            projected_value = total_value + (avg_ticket * extra)
+            
+            # Helper to find tier for a count
+            new_tier = tiers[0]
+            for t in tiers:
+                if new_count >= t["min"]:
+                    new_tier = t
+            
+            new_comm = projected_value * new_tier["rate"]
+            incremental = new_comm - current_commission
+            
+            scenarios.append(ProjectionScenario(
+                additional_sales=extra,
+                projected_total_sales=new_count,
+                projected_commission_amount=round(new_comm, 2),
+                incremental_earnings=round(incremental, 2),
+                new_tier_name=new_tier["name"]
+            ))
+            
+        return CommissionProjectionResponse(
+            current_sales_count=count,
+            current_sales_value=round(total_value, 2),
+            current_commission_amount=round(current_commission, 2),
+            current_tier=CommissionTier(
+                name=current_tier_def["name"],
+                min_sales=current_tier_def["min"],
+                commission_rate=current_tier_def["rate"],
+                is_current=True
+            ),
+            next_tier=CommissionTier(
+                name=next_tier_def["name"],
+                min_sales=next_tier_def["min"],
+                commission_rate=next_tier_def["rate"],
+                is_current=False
+            ) if next_tier_def else None,
+            sales_to_next_tier=(next_tier_def["min"] - count) if next_tier_def else 0,
+            scenarios=scenarios
+        )
+
+    except Exception as e:
+        logger.error(f"Commission projection error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

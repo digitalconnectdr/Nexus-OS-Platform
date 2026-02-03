@@ -3,6 +3,8 @@ from app.models.core import Organization, UserProfile, Campaign, Product, SalesO
 from app.models.sales_goal import SalesGoal
 from app.models.status import Status
 
+from app.models.tournament import Tournament, TournamentParticipation
+
 # Alias para compatibilidad con código legado o Maestro
 User = UserProfile
 
@@ -16,5 +18,7 @@ __all__ = [
     "Product",
     "SalesOrder",
     "SalesGoal",
-    "Status"
+    "Status",
+    "Tournament",
+    "TournamentParticipation"
 ]

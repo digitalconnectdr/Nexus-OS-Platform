@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { fetchFromAPI } from '@/lib/api';
+import { RefreshCwIcon } from 'lucide-react';
+import LoadingState from '@/components/ui/LoadingState';
 
 interface AgentScorecard360 {
     agent_id: string;
@@ -50,12 +52,18 @@ interface Props {
     startDate: string;
     endDate: string;
     searchTerm: string;
+    supervisorId?: string;
+    campaignId?: string;
 }
 
-export default function AgentScorecardTable({ startDate, endDate, searchTerm }: Props) {
+export default function AgentScorecardTable({ startDate, endDate, searchTerm, supervisorId: propSupervisorId, campaignId: propCampaignId }: Props) {
     const month = startDate.substring(0, 7); // Derivado de la fecha global
-    const [supervisorId, setSupervisorId] = useState('');
-    const [campaignId, setCampaignId] = useState('');
+    const [supervisorIdState, setSupervisorId] = useState('');
+    const [campaignIdState, setCampaignId] = useState('');
+
+    // Priorizamos los props sobre el estado local (si se proveen)
+    const supervisorId = propSupervisorId !== undefined ? propSupervisorId : supervisorIdState;
+    const campaignId = propCampaignId !== undefined ? propCampaignId : campaignIdState;
     const [data, setData] = useState<GroupedAgent[]>([]);
     const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
     const [filters, setFilters] = useState<{ supervisors: any[], campaigns: any[] }>({ supervisors: [], campaigns: [] });
@@ -125,14 +133,18 @@ export default function AgentScorecardTable({ startDate, endDate, searchTerm }: 
 
             const result: Scorecard360Response = await fetchFromAPI(`/api/v1/analytics/scorecard/agents?${params.toString()}`);
             setData(groupData(result.items));
-            setFilters({ supervisors: result.supervisors, campaigns: result.campaigns });
+
+            // Fallback for filters if not provided by parent (legacy/standalone support)
+            if (propSupervisorId === undefined && propCampaignId === undefined) {
+                setFilters({ supervisors: result.supervisors, campaigns: result.campaigns });
+            }
         } catch (err: any) {
             console.error("Scorecard Load Error:", err);
             setError("Error al cargar el scorecard comercial.");
         } finally {
             setLoading(false);
         }
-    }, [month, supervisorId, campaignId]);
+    }, [month, supervisorId, campaignId, propSupervisorId, propCampaignId]);
 
     const toggleAgent = (agentId: string) => {
         setExpandedAgents(prev => {
@@ -181,58 +193,86 @@ export default function AgentScorecardTable({ startDate, endDate, searchTerm }: 
 
     return (
         <div className="space-y-6">
-            {/* Header con Filtros Específicos */}
-            <div className="flex flex-wrap items-center gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+            {/* Header con Filtros Específicos (Solo se muestran si no se pasan por props) */}
+            {(propSupervisorId === undefined && propCampaignId === undefined) && (
+                <div className="flex flex-wrap items-center gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
 
-                <div className="flex flex-col gap-1 min-w-[200px]">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Supervisor</label>
-                    <select
-                        value={supervisorId}
-                        onChange={(e) => setSupervisorId(e.target.value)}
-                        className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer"
-                    >
-                        <option value="">Todos los Supervisores</option>
-                        {filters.supervisors.map(s => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
-                        ))}
-                    </select>
+                    <div className="flex flex-col gap-1 min-w-[200px]">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Supervisor</label>
+                        <select
+                            value={supervisorId}
+                            onChange={(e) => setSupervisorId(e.target.value)}
+                            className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer"
+                        >
+                            <option value="">Todos los Supervisores</option>
+                            {filters.supervisors.map(s => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1 min-w-[200px]">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Campaña</label>
+                        <select
+                            value={campaignId}
+                            onChange={(e) => setCampaignId(e.target.value)}
+                            className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer"
+                        >
+                            <option value="">Todas las Campañas</option>
+                            {filters.campaigns.map(c => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="flex items-end gap-2 ml-auto">
+                        <button
+                            onClick={expandAll}
+                            className="bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm"
+                        >
+                            Expandir Todo
+                        </button>
+                        <button
+                            onClick={collapseAll}
+                            className="bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm"
+                        >
+                            Colapsar Todo
+                        </button>
+                        <button
+                            onClick={loadData}
+                            className="p-2.5 bg-white border border-slate-200 hover:border-blue-500 hover:text-blue-600 rounded-xl text-slate-400 transition-all shadow-sm active:scale-95 ml-2"
+                            title="Sincronizar Data"
+                        >
+                            <RefreshCwIcon className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
+            )}
 
-                <div className="flex flex-col gap-1 min-w-[200px]">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Campaña</label>
-                    <select
-                        value={campaignId}
-                        onChange={(e) => setCampaignId(e.target.value)}
-                        className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 outline-none appearance-none cursor-pointer"
-                    >
-                        <option value="">Todas las Campañas</option>
-                        {filters.campaigns.map(c => (
-                            <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                    </select>
-                </div>
-
-                <div className="flex items-end gap-2 ml-auto">
+            {/* Si los filtros están arriba, solo mostramos los botones de acción */}
+            {(propSupervisorId !== undefined || propCampaignId !== undefined) && (
+                <div className="flex items-center gap-2 justify-end">
                     <button
                         onClick={expandAll}
-                        className="bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm"
+                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm"
                     >
                         Expandir Todo
                     </button>
                     <button
                         onClick={collapseAll}
-                        className="bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all shadow-sm"
+                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 px-4 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm"
                     >
                         Colapsar Todo
                     </button>
                     <button
                         onClick={loadData}
-                        className="bg-slate-900 hover:bg-black text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-sm"
+                        className="p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-blue-500 hover:text-blue-600 rounded-xl text-slate-400 dark:text-slate-500 transition-all shadow-sm active:scale-95 ml-2"
+                        title="Sincronizar Data"
                     >
-                        Sincronizar Data
+                        <RefreshCwIcon className="w-4 h-4" />
                     </button>
                 </div>
-            </div>
+            )}
 
             {/* Tabla Principal */}
             <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
@@ -256,13 +296,11 @@ export default function AgentScorecardTable({ startDate, endDate, searchTerm }: 
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {loading ? (
-                                Array.from({ length: 10 }).map((_, i) => (
-                                    <tr key={i} className="animate-pulse">
-                                        <td colSpan={12} className="px-6 py-4">
-                                            <div className="h-4 bg-slate-100 rounded-full w-full" />
-                                        </td>
-                                    </tr>
-                                ))
+                                <tr>
+                                    <td colSpan={12} className="px-6 py-12">
+                                        <LoadingState message="Analizando rendimiento de agentes..." />
+                                    </td>
+                                </tr>
                             ) : filteredData.length === 0 ? (
                                 <tr>
                                     <td colSpan={12} className="px-6 py-20 text-center">
@@ -404,7 +442,7 @@ export default function AgentScorecardTable({ startDate, endDate, searchTerm }: 
                 </div>
             </div>
             {error && (
-                <div className="bg-rose-50 border border-rose-100 p-4 rounded-2xl text-rose-600 text-[10px] font-black uppercase tracking-widest text-center">
+                <div className="bg-rose-50 border border-rose-100 p-4 rounded-2xl text-rose-600 text-[10px] font-black uppercase tracking-widest text-center mt-8 mb-4">
                     {error}
                 </div>
             )}

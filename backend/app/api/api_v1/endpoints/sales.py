@@ -9,54 +9,114 @@ from app.api.pagination import CommonQueryParams, apply_pagination_logic
 from app.models.core import SalesOrder, Product, Campaign, UserProfile
 from app.models.status import Status
 from app.schemas.sales import SalesOrderOut
-from app.schemas.core import PaginatedResponse
-from app.core.security import get_current_user
+from app.schemas.core import PaginatedResponse, UserRole
+from app.core.security import get_current_user, check_permission
 import uuid
 import datetime
 import csv
 import io
 from fastapi.responses import StreamingResponse
+import logging
+from app.core.supabase import supabase_admin
+
+logger = logging.getLogger(__name__)
+
+def to_uuid(val):
+    if not val: return None
+    try:
+        return uuid.UUID(str(val))
+    except:
+        return None
 
 router = APIRouter()
 
 @router.get("/", response_model=PaginatedResponse[SalesOrderOut])
 async def read_sales(
     scope: Optional[str] = Query(None, description="active | history"),
-    params: CommonQueryParams = Depends(),
-    db: AsyncSession = Depends(deps.get_db),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    current_user: UserProfile = Depends(get_current_user),
+    db: AsyncSession = Depends(deps.get_db)
 ):
-    # 1. Base query with all relationships for the dashboard
-    query = select(SalesOrder).options(
-        selectinload(SalesOrder.campaign),
-        selectinload(SalesOrder.product),
-        selectinload(SalesOrder.agent),
-        selectinload(SalesOrder.supervisor),
-        selectinload(SalesOrder.digitizer)
-    )
-
-    # 2. Apply Scope Filtering (Workflow Engine)
-    if scope == "active":
-        # Dynamic filter: Only statuses configured to show in dashboard
-        query = query.join(Status, SalesOrder.status == Status.name)\
-                     .where(Status.is_active_work == True)
-    elif scope == "history":
-        # Dynamic filter: Terminal states configured as non-active work
-        query = query.join(Status, SalesOrder.status == Status.name)\
-                     .where(Status.is_active_work == False)
-
-    # 3. Apply pagination logic
-    # Searchable fields for sales orders
-    search_fields = ["customer_name", "customer_doc_id", "status", "os_madre", "os_hija"]
+    """Listado de ventas vía SQL Directo"""
+    # 1. Permission checks
+    permissions_to_check = ["sales:read", "dashboard:view"]
+    if scope == "history":
+        permissions_to_check.extend(["sales:read_history", "history:view"])
     
-    pagination_result = await apply_pagination_logic(
-        db=db,
-        model=SalesOrder,
-        params=params,
-        base_query=query,
-        search_fields=search_fields
-    )
-    
-    return pagination_result
+    has_permission = False
+    for p_name in permissions_to_check:
+        try:
+            res, act = p_name.split(":")
+            checker = check_permission(res, act)
+            await checker(current_user, db)
+            has_permission = True
+            break
+        except HTTPException: continue
+            
+    if not has_permission:
+        logger.warning(f"🚫 Access Denied: {current_user.email}")
+        raise HTTPException(status_code=403, detail="Acceso denegado")
+
+    try:
+        # 2. Base Query
+        stmt = (
+            select(SalesOrder)
+            .options(
+                selectinload(SalesOrder.campaign),
+                selectinload(SalesOrder.product),
+                selectinload(SalesOrder.agent),
+                selectinload(SalesOrder.supervisor)
+            )
+            .where(SalesOrder.is_deleted == False, SalesOrder.tenant_id == current_user.tenant_id)
+        )
+        
+        # 3. Role Scoping
+        if current_user.role not in [UserRole.SUPER_ADMIN, UserRole.ADMINISTRADOR, UserRole.GERENTE, UserRole.SUPERVISOR, UserRole.SUPERVISOR_SENIOR]:
+            stmt = stmt.where(SalesOrder.agent_id == current_user.id)
+        
+        # 4. Scope filtering (Status Scope)
+        if scope in ["active", "history"]:
+            target_scope = "DASHBOARD" if scope == "active" else "ARCHIVE"
+            # Subquery to get statuses with the target scope
+            status_stmt = select(Status.name).where(Status.tenant_id == current_user.tenant_id, Status.scope == target_scope)
+            status_result = await db.execute(status_stmt)
+            status_names = [s[0] for s in status_result.all()]
+            stmt = stmt.where(SalesOrder.status.in_(status_names))
+
+        # 5. Search
+        if search:
+            from sqlalchemy import or_
+            stmt = stmt.where(or_(
+                SalesOrder.customer_name.ilike(f"%{search}%"),
+                SalesOrder.customer_doc_id.ilike(f"%{search}%"),
+                SalesOrder.status.ilike(f"%{search}%")
+            ))
+
+        # 6. Count
+        from sqlalchemy import func
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total_count_res = await db.execute(count_stmt)
+        total_count = total_count_res.scalar() or 0
+
+        # 7. Pagination and Sort
+        stmt = stmt.order_by(SalesOrder.created_at.desc())
+        stmt = stmt.offset((page - 1) * size).limit(size)
+
+        # 8. Execute
+        result = await db.execute(stmt)
+        sales = result.scalars().all()
+
+        return PaginatedResponse(
+            total=total_count,
+            page=page,
+            size=size,
+            items=sales
+        )
+    except Exception as e:
+        logger.error(f"Error list sales SQL: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/", response_model=SalesOrderOut)
 async def create_sale(
@@ -64,32 +124,57 @@ async def create_sale(
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserProfile = Depends(get_current_user),
     payload: dict = Body(...),
+    _: bool = Depends(check_permission("sales", "create", module="dashboard"))
 ) -> Any:
     try:
-        def to_uuid(val):
-            if not val: return None
-            try:
-                return uuid.UUID(str(val))
-            except:
-                return None
+        # Helper relocate to module scope
 
-        tenant_id = to_uuid(payload.get("tenant_id")) or uuid.UUID('00000000-0000-0000-0000-000000000000')
-        new_id = uuid.uuid4()
-        
-        # --- DYNAMIC INITIAL STATUS (WATERFALL) ---
-        from app.models.core import Campaign
-        initial_status = None
-        
-        # 1. Check for Campaign-Specific Default
+        # Safeguard: Use current_user.tenant_id if payload tenant_id is missing or default
+        payload_tenant = to_uuid(payload.get("tenant_id"))
+        if not payload_tenant or str(payload_tenant) == '00000000-0000-0000-0000-000000000000':
+            tenant_id = current_user.tenant_id
+        else:
+            tenant_id = payload_tenant
+
+        # --- BUSINESS LOGIC VALDATIONS ---
+        # 1. Price Validation
+        try:
+            price_val = float(payload.get("snapshot_price", 0))
+            if price_val < 0:
+                raise HTTPException(status_code=400, detail="El precio no puede ser negativo.")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de precio inválido.")
+
+        # 2. Campaign Validation
         campaign_id = to_uuid(payload.get("campaign_id"))
+        campaign_obj = None
         if campaign_id:
             camp_query = select(Campaign).where(Campaign.id == campaign_id)
             camp_res = await db.execute(camp_query)
             campaign_obj = camp_res.scalar_one_or_none()
-            if campaign_obj and campaign_obj.default_status_id:
-                status_query = select(Status).where(Status.id == campaign_obj.default_status_id)
-                status_res = await db.execute(status_query)
-                initial_status = status_res.scalar_one_or_none()
+            if not campaign_obj:
+                raise HTTPException(status_code=404, detail="La campaña especificada no existe.")
+
+        # 3. Product Validation
+        product_id = to_uuid(payload.get("product_id"))
+        product_obj = None
+        if product_id:
+            prod_query = select(Product).where(Product.id == product_id)
+            prod_res = await db.execute(prod_query)
+            product_obj = prod_res.scalar_one_or_none()
+            if not product_obj:
+                raise HTTPException(status_code=404, detail="El producto especificado no existe.")
+
+        new_id = uuid.uuid4()
+        
+        # --- DYNAMIC INITIAL STATUS (WATERFALL) ---
+        initial_status = None
+        
+        # 1. Check for Campaign-Specific Default
+        if campaign_obj and campaign_obj.default_status_id:
+            status_query = select(Status).where(Status.id == campaign_obj.default_status_id)
+            status_res = await db.execute(status_query)
+            initial_status = status_res.scalar_one_or_none()
         
         # 2. Check for Global Default
         if not initial_status:
@@ -104,14 +189,17 @@ async def create_sale(
             initial_status = status_res.scalar_one_or_none()
             
         if not initial_status:
-            raise HTTPException(status_code=500, detail="No sales statuses configured in system.")
+            raise HTTPException(
+                status_code=400, 
+                detail="Configuración incompleta: No hay estados de venta definidos para esta organización. Por favor, configure los estados en Ajustes."
+            )
 
         sale = SalesOrder(
             id=new_id,
             tenant_id=tenant_id,
             agent_id=current_user.id, # ALWAYS force current user as author
-            product_id=to_uuid(payload.get("product_id")),
-            campaign_id=to_uuid(payload.get("campaign_id")),
+            product_id=product_id,
+            campaign_id=campaign_id,
             supervisor_id=to_uuid(payload.get("supervisor_id")),
             customer_name=payload.get("customer_name") or payload.get("client_name") or "Cliente",
             customer_doc_id=payload.get("customer_doc_id") or payload.get("doc_id"),
@@ -119,11 +207,11 @@ async def create_sale(
             os_madre=payload.get("os_madre"),
             os_hija=payload.get("os_hija"),
             status=initial_status.name,
-            snapshot_price=float(payload.get("snapshot_price", 0)),
+            snapshot_price=price_val,
             snapshot_pp=payload.get("snapshot_pp"),
             snapshot_concept=payload.get("snapshot_concept"),
-            snapshot_family=payload.get("snapshot_family"),
-            snapshot_plan=payload.get("snapshot_plan"),
+            snapshot_family=payload.get("snapshot_family") or (product_obj.family_name if product_obj else None),
+            snapshot_plan=payload.get("snapshot_plan") or (product_obj.plan_name if product_obj else None),
             assigned_to=payload.get("assigned_to"),
             comms_claro=payload.get("comms_claro"),
             comms_orion=payload.get("comms_orion"),
@@ -149,25 +237,53 @@ async def create_sale(
         )
         sale_enriched = result.scalar_one()
         return sale_enriched
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"SAVE ERROR: {e}")
+        logger.error(f"SAVE ERROR: {e}", exc_info=True)
         try:
             await db.rollback()
         except:
             pass
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Hubo un problema interno al procesar el registro de venta. Por favor, contacte a soporte si el problema persiste. ||| TECH_DETAILS: {str(e)}"
+        )
 
 @router.delete("/{sale_id}")
 async def delete_sale(
     sale_id: uuid.UUID,
-    db: AsyncSession = Depends(deps.get_db)
+    db: AsyncSession = Depends(deps.get_db),
+    current_user: UserProfile = Depends(get_current_user)
 ):
-    result = await db.execute(select(SalesOrder).where(SalesOrder.id == sale_id))
+    # --- DYNAMIC PERMISSION CHECK (Dashboard OR History) ---
+    has_perm = False
+    for mod, res, act in [("dashboard", "sales", "delete"), ("history", "history_sales", "delete")]:
+        try:
+            checker = check_permission(res, act, module=mod)
+            await checker(current_user, db)
+            has_perm = True
+            break
+        except HTTPException:
+            continue
+            
+    if not has_perm:
+        logger.warning(f"🚫 Delete Denied for {current_user.email} on sale {sale_id}")
+        raise HTTPException(status_code=403, detail="No tiene permiso para eliminar ventas.")
+
+    result = await db.execute(
+        select(SalesOrder)
+        .where(SalesOrder.id == sale_id)
+        .where(SalesOrder.tenant_id == current_user.tenant_id)
+    )
     sale = result.scalar_one_or_none()
     if not sale:
-        raise HTTPException(status_code=404, detail="Sale not found")
+        raise HTTPException(
+            status_code=404, 
+            detail="Venta no encontrada: El registro solicitado no existe o no tiene permisos para acceder a él."
+        )
     
-    await db.delete(sale)
+    sale.is_deleted = True
     await db.commit()
     return {"status": "success"}
 
@@ -177,15 +293,51 @@ async def update_sale(
     *,
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserProfile = Depends(get_current_user),
-    payload: dict = Body(...),
+    payload: dict = Body(...)
 ) -> Any:
+    # --- DYNAMIC PERMISSION CHECK (Dashboard OR History) ---
+    # We check for general 'update' or specific 'change_status' if only status is changing
+    is_only_status = set(payload.keys()).issubset({"status", "status_id", "auditor_name"})
+    
+    perms_to_check = [
+        ("dashboard", "sales", "update"),
+        ("history", "history_sales", "update")
+    ]
+    
+    if is_only_status:
+        perms_to_check.extend([
+            ("dashboard", "sales", "change_status"),
+            ("history", "history_sales", "change_status")
+        ])
+    
+    has_perm = False
+    for mod, res, act in perms_to_check:
+        try:
+            checker = check_permission(res, act, module=mod)
+            await checker(current_user, db)
+            has_perm = True
+            break
+        except HTTPException:
+            continue
+            
+    if not has_perm:
+        logger.warning(f"🚫 Update Denied for {current_user.email} on sale {sale_id}")
+        raise HTTPException(status_code=403, detail="No tiene permiso para editar ventas o cambiar su estatus.")
+
     try:
-        query = select(SalesOrder).filter(SalesOrder.id == sale_id)
+        query = (
+            select(SalesOrder)
+            .where(SalesOrder.id == sale_id)
+            .where(SalesOrder.tenant_id == current_user.tenant_id)
+        )
         result = await db.execute(query)
         sale = result.scalar_one_or_none()
         
         if not sale:
-            raise HTTPException(status_code=404, detail="Sale not found")
+            raise HTTPException(
+                status_code=404, 
+                detail="Venta no encontrada: No se pudo localizar el registro para su actualización."
+            )
             
         # Tracking changes for audit
         modified = []
@@ -255,7 +407,8 @@ async def update_sale(
             
         if "status_id" in payload:
             old_status = sale.status
-            s_query = select(Status).where(Status.id == payload["status_id"])
+            mapped_status_id = to_uuid(payload["status_id"])
+            s_query = select(Status).where(Status.id == mapped_status_id)
             s_res = await db.execute(s_query)
             status_obj = s_res.scalar_one_or_none()
             if status_obj:
@@ -287,22 +440,27 @@ async def update_sale(
             sale.last_updated_by = current_user.email
 
         # --- Lógica de Atribución Operativa (Claim / Last Touch) ---
-        # Si el usuario no es un vendedor, reclama la responsabilidad operativa
-        from app.schemas.core import UserRole
-        if current_user.role != UserRole.REPRESENTANTE:
+        # Si el usuario no es un vendedor (Representante o Agent), reclama la responsabilidad operativa
+        sales_roles = [UserRole.REPRESENTANTE, "Representante"]
+        if current_user.role not in sales_roles:
             sale.digitizer_id = current_user.id
             
         sale.updated_at = datetime.datetime.now() # Fallback for explicit audit
         
         await db.commit()
         return {"status": "success", "id": str(sale_id), "status_name": sale.status}
+    except HTTPException:
+        raise
     except Exception as e:
-        print(f"UPDATE ERROR: {e}")
+        logger.error(f"UPDATE ERROR: {e}", exc_info=True)
         try:
             await db.rollback()
         except:
             pass
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500, 
+            detail=f"No se pudo completar la actualización de la venta. Por favor, verifique la conexión o contacte a soporte. ||| TECH_DETAILS: {str(e)}"
+        )
 
 @router.get("/export")
 async def export_sales(
@@ -311,8 +469,15 @@ async def export_sales(
     campaign_id: Optional[uuid.UUID] = Query(None),
     scope: str = Query("all", description="active | history | all"),
     db: AsyncSession = Depends(deps.get_db),
-    current_user: UserProfile = Depends(get_current_user),
+    current_user: UserProfile = Depends(get_current_user)
 ):
+    # --- DYNAMIC FUNCTIONAL PERMISSION CHECK ---
+    if scope == "history":
+        checker = check_permission("sales", "export", module="history")
+    else:
+        checker = check_permission("sales", "export", module="dashboard")
+    
+    await checker(current_user, db)
     try:
         # Base query
         query = select(SalesOrder).options(
@@ -323,6 +488,17 @@ async def export_sales(
         )
 
         # Filters
+        query = query.where(
+            SalesOrder.is_deleted == False,
+            SalesOrder.tenant_id == current_user.tenant_id
+        )
+        
+        # --- DATA SCOPE FILTERING ---
+        high_level_roles = [UserRole.SUPER_ADMIN, UserRole.ADMINISTRADOR, UserRole.GERENTE, UserRole.SUPERVISOR, UserRole.SUPERVISOR_SENIOR]
+        if current_user.role not in high_level_roles:
+            logger.info(f"🔒 Restricted export scope for {current_user.email}")
+            query = query.where(SalesOrder.agent_id == current_user.id)
+
         if start_date:
             query = query.where(SalesOrder.created_at >= datetime.datetime.combine(start_date, datetime.time.min))
         if end_date:
@@ -331,10 +507,11 @@ async def export_sales(
         if campaign_id:
             query = query.where(SalesOrder.campaign_id == campaign_id)
         
+        from sqlalchemy import func
         if scope == "active":
-            query = query.join(Status, SalesOrder.status == Status.name).where(Status.is_active_work == True)
+            query = query.join(Status, func.lower(SalesOrder.status) == func.lower(Status.name)).where(Status.scope == "DASHBOARD")
         elif scope == "history":
-            query = query.join(Status, SalesOrder.status == Status.name).where(Status.is_active_work == False)
+            query = query.join(Status, func.lower(SalesOrder.status) == func.lower(Status.name)).where(Status.scope == "ARCHIVE")
 
         # Execute
         result = await db.execute(query.order_by(SalesOrder.created_at.desc()))

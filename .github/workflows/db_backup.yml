@@ -1,0 +1,26 @@
+name: Weekly Database Backup
+on:
+  schedule:
+    - cron: '0 0 * * 0' # Domingos a media noche
+  workflow_dispatch: # Botón manual
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL Client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Backup Database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          pg_dump "$DATABASE_URL" -F c -b -v -f schema_data_backup.dump
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: schema_data_backup.dump
+          retention-days: 30

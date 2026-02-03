@@ -4,7 +4,11 @@ import { useState, useEffect } from 'react';
 import { ShieldCheckIcon, KeyIcon, StopCircleIcon, UserPlusIcon, CheckCircleIcon, TrashIcon, LockClosedIcon, LockOpenIcon, MagnifyingGlassIcon, ChevronUpDownIcon, ChevronUpIcon, ChevronDownIcon, ArrowPathIcon, XCircleIcon } from '@heroicons/react/24/outline';
 import { fetchFromAPI } from '@/lib/api';
 import Modal from '@/components/Modal';
+import LoadingState from '@/components/ui/LoadingState';
 import { InformationCircleIcon } from '@heroicons/react/20/solid';
+import { usePermission } from '@/hooks/usePermission';
+import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 import {
     useReactTable,
     getCoreRowModel,
@@ -16,18 +20,19 @@ import {
     PaginationState
 } from '@tanstack/react-table';
 import { useDebounce } from 'use-debounce';
+import { useAuth } from '@/context/AuthContext';
+
+import { Tooltip } from '@/components/ui/tooltip';
 
 const InfoTooltip = ({ text }: { text: string }) => (
-    <div className="group relative inline-block ml-1.5">
-        <InformationCircleIcon className="w-3.5 h-3.5 text-blue-400 cursor-help hover:text-blue-600 transition-colors" />
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-48 p-2 bg-gray-900 text-white text-[10px] font-medium rounded-lg shadow-xl z-50 animate-in fade-in zoom-in duration-200">
-            {text}
-            <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-gray-900" />
-        </div>
-    </div>
+    <Tooltip content={text}>
+        <InformationCircleIcon className="w-3.5 h-3.5 text-blue-400 cursor-help hover:text-blue-600 transition-colors ml-1.5" />
+    </Tooltip>
 );
 
 export default function AdminUsersTable() {
+    const { can } = usePermission();
+    const { toast } = useToast();
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -35,11 +40,12 @@ export default function AdminUsersTable() {
     const [actionLoading, setActionLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [tenantId, setTenantId] = useState<string | null>(null);
-    const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
-    const [canChangeRole, setCanChangeRole] = useState(false);
+    const canChangeRole = can('config_users', 'users', 'update') || can('policies', 'policies', 'update');
     const [allProducts, setAllProducts] = useState<any[]>([]);
     const [supervisors, setSupervisors] = useState<any[]>([]);
     const [campaigns, setCampaigns] = useState<any[]>([]);
+    const [organizations, setOrganizations] = useState<any[]>([]);
+    const { user } = useAuth();
 
     // Password Reset States
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -65,7 +71,6 @@ export default function AdminUsersTable() {
 
     useEffect(() => {
         loadTenant();
-        loadCurrentUserPermissions();
         loadMasterData();
     }, []);
 
@@ -77,17 +82,15 @@ export default function AdminUsersTable() {
 
     const loadMasterData = async () => {
         try {
-            // Fetch all users for master data (supervisors) - we might need a non-paginated or large list for this
-            const usersDataRes = await fetchFromAPI('/api/v1/users/?size=500');
-            const [campData] = await Promise.all([
-                fetchFromAPI('/api/v1/campaigns/')
+            // Fetch supervisors via Selector for consistency
+            const [supData, campData, orgData] = await Promise.all([
+                fetchFromAPI('/api/v1/selectors/supervisors'),
+                fetchFromAPI('/api/v1/campaigns/'),
+                fetchFromAPI('/api/v1/organizations/')
             ]);
-            // Filtrar supervisores
-            const sups = (usersDataRes.items || []).filter((u: any) =>
-                u.role?.toUpperCase().includes('SUPERVISOR')
-            );
-            setSupervisors(sups);
+            setSupervisors(Array.isArray(supData) ? supData : (supData.items || []));
             setCampaigns(campData);
+            setOrganizations(orgData);
         } catch (err) {
             console.error("Error cargando datos maestros", err);
         }
@@ -103,21 +106,6 @@ export default function AdminUsersTable() {
         }
     };
 
-    const loadCurrentUserPermissions = async () => {
-        try {
-            const me = await fetchFromAPI('/api/v1/permissions/me');
-            setCurrentUserRole(me.role);
-
-            // Logic: Is Super Admin OR has the specific permission
-            const hasChangeRolePerm = me.is_super_admin || me.permissions?.['users:change_role'] === true;
-            setCanChangeRole(hasChangeRolePerm);
-
-        } catch (err) {
-            console.error("Error loading permissions", err);
-            // Fallback safe: assume no perms if fetch fails
-            setCanChangeRole(false);
-        }
-    };
 
     const loadTenant = async () => {
         try {
@@ -138,18 +126,23 @@ export default function AdminUsersTable() {
             const params = new URLSearchParams({
                 page: (pagination.pageIndex + 1).toString(),
                 size: pagination.pageSize.toString(),
-                include_inactive: 'true',
+                include_inactive: 'true',  // Keep as string for URL params
                 include_deleted: showDeleted.toString(),
             });
 
             if (debouncedFilter) params.append('search', debouncedFilter);
             if (sort) params.append('sort_by', sort);
 
+            console.log('Loading users with params:', params.toString());
             const data = await fetchFromAPI(`/api/v1/users/?${params.toString()}`);
+            console.log('Users loaded:', data);
             setUsers(data.items);
             setTotalRecords(data.total);
         } catch (err) {
             console.error('Error loading users:', err);
+            // Set empty data on error
+            setUsers([]);
+            setTotalRecords(0);
         } finally {
             setLoading(false);
         }
@@ -172,6 +165,7 @@ export default function AdminUsersTable() {
             card_number: formData.get('card_number'),
             supervisor_id: formData.get('supervisor_id') || null,
             default_campaign_id: formData.get('default_campaign_id') || null,
+            tenant_id: formData.get('tenant_id') || null,
             join_date: formData.get('join_date') ? new Date(formData.get('join_date') as string).toISOString() : null
         };
 
@@ -215,68 +209,125 @@ export default function AdminUsersTable() {
         setIsModalOpen(true);
     };
 
-    const handleToggleStatus = async (user: any) => {
-        if (!confirm(`¿Está seguro de ${user.is_active ? 'DESACTIVAR' : 'ACTIVAR'} a ${user.first_name}?`)) return;
-
-        try {
-            await fetchFromAPI(`/api/v1/users/${user.id}`, {
-                method: 'PATCH',
-                body: JSON.stringify({ is_active: !user.is_active })
-            });
-            loadUsers();
-        } catch (err: any) {
-            console.error("Error al cambiar estado:", err);
-            alert(err.message || 'Error al cambiar estado');
-        }
+    const handleToggleStatus = (user: any) => {
+        toast({
+            title: user.is_active ? "¿Bloquear Usuario?" : "¿Reactivar Acceso?",
+            description: user.is_active
+                ? `El usuario ${user.first_name} perderá acceso inmediato al sistema.`
+                : `Se restaurarán los privilegios de acceso para ${user.first_name}.`,
+            action: (
+                <ToastAction
+                    altText="Confirmar"
+                    onClick={async () => {
+                        try {
+                            await fetchFromAPI(`/api/v1/users/${user.id}`, {
+                                method: 'PATCH',
+                                body: JSON.stringify({ is_active: !user.is_active })
+                            });
+                            toast({
+                                title: "Estado Actualizado",
+                                description: `El usuario ahora está ${user.is_active ? 'Bloqueado' : 'Activo'}.`,
+                            });
+                            loadUsers();
+                        } catch (err: any) {
+                            toast({
+                                title: "Error",
+                                description: err.message || 'Error al cambiar estado',
+                                variant: "destructive"
+                            });
+                        }
+                    }}
+                >
+                    CONFIRMAR
+                </ToastAction>
+            )
+        });
     };
 
-    const handleDelete = async (user: any) => {
-        // Si ya está eliminado, preguntamos por eliminación permanente
-        if (user.is_deleted) {
-            if (!window.confirm(`¿Desea ELIMINAR PERMANENTEMENTE a ${user.email}? Esta acción es irreversible.`)) return;
-            try {
-                setActionLoading(true);
-                await fetchFromAPI(`/api/v1/users/${user.id}?permanent=true`, { method: 'DELETE' });
-                loadUsers();
-            } catch (err: any) {
-                alert(err.message || "Error al eliminar permanentemente");
-            } finally {
-                setActionLoading(false);
-            }
-            return;
-        }
-
+    const handleDelete = (user: any) => {
         const displayName = (user.first_name && user.last_name)
             ? `${user.first_name} ${user.last_name}`
             : (user.first_name || user.last_name || user.email || "este usuario");
 
-        if (!window.confirm(`¿Está seguro de MOVER A ELIMINADOS a ${displayName}? Su acceso será revocado.`)) {
+        if (user.is_deleted) {
+            toast({
+                title: "⚠️ ELIMINACIÓN PERMANENTE",
+                description: `¿Está seguro de purgar a ${user.email}? Esta acción NO se puede deshacer.`,
+                variant: "destructive",
+                duration: Infinity,
+                action: (
+                    <ToastAction
+                        altText="ELIMINAR"
+                        className="bg-red-600 text-white hover:bg-red-700 border-none"
+                        onClick={async () => {
+                            try {
+                                setActionLoading(true);
+                                await fetchFromAPI(`/api/v1/users/${user.id}?permanent=true`, { method: 'DELETE' });
+                                toast({ title: "Usuario Purgado", description: "El registro ha sido eliminado permanentemente." });
+                                loadUsers();
+                            } catch (err: any) {
+                                toast({ title: "Error crítico", description: err.message, variant: "destructive" });
+                            } finally {
+                                setActionLoading(false);
+                            }
+                        }}
+                    >
+                        PURGAR
+                    </ToastAction>
+                )
+            });
             return;
         }
 
-        try {
-            await fetchFromAPI(`/api/v1/users/${user.id}`, {
-                method: 'DELETE'
-            });
-            loadUsers();
-        } catch (error: any) {
-            console.error('Error deleting user:', error);
-            alert(error.message || 'Hubo un error al eliminar.');
-            loadUsers();
-        }
+        toast({
+            title: "¿Mover a Eliminados?",
+            description: `El acceso de ${displayName} será revocado.`,
+            variant: "destructive",
+            duration: Infinity,
+            action: (
+                <ToastAction
+                    altText="ELIMINAR"
+                    onClick={async () => {
+                        try {
+                            await fetchFromAPI(`/api/v1/users/${user.id}`, { method: 'DELETE' });
+                            toast({ title: "Usuario Eliminado", description: "El usuario ha sido movido a la papelera." });
+                            loadUsers();
+                        } catch (error: any) {
+                            toast({ title: "Error", description: error.message, variant: "destructive" });
+                            loadUsers();
+                        }
+                    }}
+                >
+                    ELIMINAR
+                </ToastAction>
+            )
+        });
     };
 
-    const handleReactivate = async (user: any) => {
-        if (!confirm(`¿Desea reactivar la identidad de ${user.email}?`)) return;
-        try {
-            setActionLoading(true);
-            await fetchFromAPI(`/api/v1/users/${user.id}/reactivate`, { method: 'POST' });
-            loadUsers();
-        } catch (err: any) {
-            alert(err.message || "Error al reactivar usuario");
-        } finally {
-            setActionLoading(false);
-        }
+    const handleReactivate = (user: any) => {
+        toast({
+            title: "¿Reactivar Identidad?",
+            description: `Se restaurará la cuenta de ${user.email}.`,
+            action: (
+                <ToastAction
+                    altText="Reactivar"
+                    onClick={async () => {
+                        try {
+                            setActionLoading(true);
+                            await fetchFromAPI(`/api/v1/users/${user.id}/reactivate`, { method: 'POST' });
+                            toast({ title: "Identidad Restaurada", description: "El usuario ya puede acceder nuevamente." });
+                            loadUsers();
+                        } catch (err: any) {
+                            toast({ title: "Error", description: err.message, variant: "destructive" });
+                        } finally {
+                            setActionLoading(false);
+                        }
+                    }}
+                >
+                    REACTIVAR
+                </ToastAction>
+            )
+        });
     };
 
     const getStatusBadge = (user: any) => {
@@ -326,6 +377,11 @@ export default function AdminUsersTable() {
     const columnHelper = createColumnHelper<any>();
 
     const columns = [
+        columnHelper.accessor('organization_name', {
+            id: 'organization',
+            header: 'Nombre Organizacion',
+            cell: info => <span className="text-[12px] font-semibold text-gray-600 uppercase tracking-tight">{info.getValue() || 'N/A'}</span>,
+        }),
         columnHelper.accessor((row) => `${row.first_name} ${row.last_name}`, {
             id: 'name',
             header: 'Nombre',
@@ -351,58 +407,70 @@ export default function AdminUsersTable() {
                 <div className="flex justify-end gap-2">
                     {!info.row.original.is_deleted ? (
                         <>
-                            <button
-                                title="Editar Usuario"
-                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
-                                onClick={() => handleEditClick(info.row.original)}
-                            >
-                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                </svg>
-                            </button>
-                            <button
-                                title="Cambiar Contraseña"
-                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
-                                onClick={() => {
-                                    setSelectedUserForReset(info.row.original);
-                                    setPwdData({ password: '', confirm_password: '' });
-                                    setPwdError(null);
-                                    setIsPasswordModalOpen(true);
-                                }}
-                            >
-                                <KeyIcon className="w-5 h-5" />
-                            </button>
-                            <button
-                                title={info.row.original.is_active ? 'Bloquear Usuario' : 'Desbloquear Usuario'}
-                                className={`p-1.5 rounded transition-all ${info.row.original.is_active ? 'text-gray-400 hover:text-orange-600 hover:bg-orange-50' : 'text-orange-600 hover:bg-orange-100'}`}
-                                onClick={() => handleToggleStatus(info.row.original)}
-                            >
-                                {info.row.original.is_active ? <LockClosedIcon className="w-5 h-5" /> : <LockOpenIcon className="w-5 h-5" />}
-                            </button>
-                            <button
-                                title="Mover a Eliminados"
-                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
-                                onClick={() => handleDelete(info.row.original)}
-                            >
-                                <TrashIcon className="w-5 h-5" />
-                            </button>
+                            {can('config_users', 'users', 'update') && (
+                                <button
+                                    title="Editar Usuario"
+                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                                    onClick={() => handleEditClick(info.row.original)}
+                                >
+                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                    </svg>
+                                </button>
+                            )}
+                            {can('config_users', 'config_users', 'manage') && (
+                                <button
+                                    title="Cambiar Contraseña"
+                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                                    onClick={() => {
+                                        setSelectedUserForReset(info.row.original);
+                                        setPwdData({ password: '', confirm_password: '' });
+                                        setPwdError(null);
+                                        setIsPasswordModalOpen(true);
+                                    }}
+                                >
+                                    <KeyIcon className="w-5 h-5" />
+                                </button>
+                            )}
+                            {can('config_users', 'config_users', 'manage') && (
+                                <button
+                                    title={info.row.original.is_active ? 'Bloquear Usuario' : 'Desbloquear Usuario'}
+                                    className={`p-1.5 rounded transition-all ${info.row.original.is_active ? 'text-gray-400 hover:text-orange-600 hover:bg-orange-50' : 'text-orange-600 hover:bg-orange-100'}`}
+                                    onClick={() => handleToggleStatus(info.row.original)}
+                                >
+                                    {info.row.original.is_active ? <LockClosedIcon className="w-5 h-5" /> : <LockOpenIcon className="w-5 h-5" />}
+                                </button>
+                            )}
+                            {can('config_users', 'users', 'delete') && (
+                                <button
+                                    title="Mover a Eliminados"
+                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                                    onClick={() => handleDelete(info.row.original)}
+                                >
+                                    <TrashIcon className="w-5 h-5" />
+                                </button>
+                            )}
                         </>
                     ) : (
                         <>
-                            <button
-                                title="Reactivar Usuario"
-                                className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-all"
-                                onClick={() => handleReactivate(info.row.original)}
-                            >
-                                <ArrowPathIcon className="w-5 h-5" />
-                            </button>
-                            <button
-                                title="Eliminar Permanentemente"
-                                className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-all"
-                                onClick={() => handleDelete(info.row.original)}
-                            >
-                                <TrashIcon className="w-5 h-5" strokeWidth={2.5} />
-                            </button>
+                            {can('config_users', 'config_users', 'manage') && (
+                                <button
+                                    title="Reactivar Usuario"
+                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-all"
+                                    onClick={() => handleReactivate(info.row.original)}
+                                >
+                                    <ArrowPathIcon className="w-5 h-5" />
+                                </button>
+                            )}
+                            {can('config_users', 'users', 'update') && (
+                                <button
+                                    title="Eliminar Permanentemente"
+                                    className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-all"
+                                    onClick={() => handleDelete(info.row.original)}
+                                >
+                                    <TrashIcon className="w-5 h-5" strokeWidth={2.5} />
+                                </button>
+                            )}
                         </>
                     )}
                 </div>
@@ -439,13 +507,15 @@ export default function AdminUsersTable() {
                     </h2>
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Gestión Centralizada de Identidades y Roles</p>
                 </div>
-                <button
-                    onClick={handleOpenCreateModal}
-                    className="bg-blue-800 hover:bg-blue-900 text-white px-4 h-9 rounded-sm text-[11px] font-bold uppercase tracking-widest shadow-sm transition-all flex items-center gap-2"
-                >
-                    <UserPlusIcon className="w-4 h-4" />
-                    Nuevo Usuario
-                </button>
+                {can('config_users', 'users', 'create') && (
+                    <button
+                        onClick={handleOpenCreateModal}
+                        className="bg-blue-800 hover:bg-blue-900 text-white px-4 h-9 rounded-sm text-[11px] font-bold uppercase tracking-widest shadow-sm transition-all flex items-center gap-2"
+                    >
+                        <UserPlusIcon className="w-4 h-4" />
+                        Nuevo Usuario
+                    </button>
+                )}
             </div>
 
             <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-gray-50/50 p-4 rounded-lg border border-gray-100">
@@ -505,7 +575,7 @@ export default function AdminUsersTable() {
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                         {loading ? (
-                            <tr><td colSpan={columns.length} className="px-6 py-12 text-center text-[12px] font-bold text-gray-300 uppercase tracking-widest">Sincronizando con Auth...</td></tr>
+                            <tr><td colSpan={columns.length} className="px-6 py-4"><LoadingState message="Sincronizando con Auth..." /></td></tr>
                         ) : table.getRowModel().rows.length === 0 ? (
                             <tr><td colSpan={columns.length} className="px-6 py-12 text-center text-[12px] font-bold text-gray-300 uppercase tracking-widest">No se encontraron resultados</td></tr>
                         ) : table.getRowModel().rows.map(row => (
@@ -610,7 +680,10 @@ export default function AdminUsersTable() {
                                 method: 'PATCH',
                                 body: JSON.stringify(pwdData)
                             });
-                            alert("✅ Contraseña actualizada correctamente");
+                            toast({
+                                title: "✅ Password Actualizado",
+                                description: "Las nuevas credenciales ya están activas.",
+                            });
                             setIsPasswordModalOpen(false);
                         } catch (err: any) {
                             setPwdError(err.message || "Error al actualizar la contraseña");
@@ -680,6 +753,7 @@ export default function AdminUsersTable() {
             </Modal>
 
             <Modal
+                key={editingUser?.id || 'new'}
                 isOpen={isModalOpen}
                 onClose={() => { setIsModalOpen(false); setEditingUser(null); }}
                 title={
@@ -727,7 +801,9 @@ export default function AdminUsersTable() {
                                         disabled={editingUser && !canChangeRole}
                                         className={`w-full border border-gray-300 rounded-md px-3 h-9 text-xs font-bold focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all uppercase appearance-none cursor-pointer ${editingUser && !canChangeRole ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : 'text-blue-900 bg-white shadow-sm'}`}
                                     >
-                                        <option value="Super Admin">Super Admin</option>
+                                        {(user?.role === 'Super Admin' || user?.is_super_admin) && (
+                                            <option value="Super Admin">Super Admin</option>
+                                        )}
                                         <option value="Administrador">Administrador</option>
                                         <option value="Cliente">Cliente</option>
                                         <option value="Gerente">Gerente</option>
@@ -738,6 +814,20 @@ export default function AdminUsersTable() {
                                         <option value="Seguimiento">Seguimiento</option>
                                         <option value="Digitación">Digitación</option>
                                         <option value="Representante">Representante</option>
+                                    </select>
+                                </div>
+                                <div className="col-span-12 md:col-span-4 space-y-1">
+                                    <label className="text-[12px] font-bold text-gray-500 uppercase tracking-wider pl-1 font-black text-rose-600">Organización (Multi-Tenant)</label>
+                                    <select
+                                        required
+                                        name="tenant_id"
+                                        defaultValue={editingUser?.tenant_id || tenantId || ''}
+                                        disabled={(user?.role || user?.user_metadata?.role)?.trim().toUpperCase() !== 'SUPER ADMIN'}
+                                        className={`w-full border border-gray-300 rounded-md px-3 h-9 text-xs font-bold focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all uppercase appearance-none cursor-pointer ${(user?.role || user?.user_metadata?.role)?.trim().toUpperCase() !== 'SUPER ADMIN' ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : 'text-rose-900 bg-white shadow-sm font-black'}`}
+                                    >
+                                        {organizations.map(org => (
+                                            <option key={org.id} value={org.id}>{org.name}</option>
+                                        ))}
                                     </select>
                                 </div>
                                 <div className="col-span-12 md:col-span-8 space-y-1">
@@ -791,7 +881,7 @@ export default function AdminUsersTable() {
                                         </label>
                                         <select name="supervisor_id" defaultValue={editingUser?.supervisor_id || ''} className="w-full bg-white border border-gray-300 rounded-md px-3 h-9 text-xs font-bold text-gray-900 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all uppercase appearance-none cursor-pointer">
                                             <option value="">Sin Asignar</option>
-                                            {supervisors.map(s => <option key={s.id} value={s.id}>{s.first_name} {s.last_name}</option>)}
+                                            {supervisors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                         </select>
                                     </div>
                                     <div className="space-y-1">

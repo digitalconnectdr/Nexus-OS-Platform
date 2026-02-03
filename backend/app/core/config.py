@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     # Supabase
     SUPABASE_URL: str
     SUPABASE_SERVICE_KEY: str
+    SUPABASE_JWT_SECRET: str
     
     # Database
     DATABASE_URL: str

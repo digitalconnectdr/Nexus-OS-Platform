@@ -7,8 +7,14 @@ import { supabase } from '@/lib/supabase';
 import { PencilIcon, TrashIcon, CubeIcon, TagIcon, CurrencyDollarIcon, PresentationChartLineIcon, ArrowDownTrayIcon, CloudArrowUpIcon, ExclamationTriangleIcon, CheckCircleIcon, ArrowPathIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
 import ProductsTable from './ProductsTable';
 import Pagination from '@/components/ui/Pagination';
+import LoadingState from '@/components/ui/LoadingState';
+import { usePermission } from '@/hooks/usePermission';
+import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 
 export default function ProductManager({ searchTerm = '' }: { searchTerm?: string }) {
+    const { can } = usePermission();
+    const { toast } = useToast();
     const [products, setProducts] = useState<any[]>([]);
     const [campaigns, setCampaigns] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
@@ -118,6 +124,10 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
 
             setIsModalOpen(false);
             setEditingProduct(null);
+            toast({
+                title: "✅ Producto Guardado",
+                description: `El SKU "${productData.name}" ha sido actualizado en el catálogo.`,
+            });
             loadData();
         } catch (err: any) {
             console.error(err);
@@ -150,30 +160,43 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
         setSelectedIds(ids);
     };
 
-    const handleBatchDelete = async () => {
-        if (!confirm(`¿Está seguro de eliminar ${selectedIds.length} productos del catálogo?`)) return;
-
-        setBatchLoading(true);
-        try {
-            await fetchFromAPI('/api/v1/products/batch-delete', {
-                method: 'POST',
-                body: JSON.stringify(selectedIds)
-            });
-            setSelectedIds([]);
-            loadData();
-        } catch (err: any) {
-            console.error('Failed to batch delete:', err);
-            alert('Error al eliminar productos en lote');
-        } finally {
-            setBatchLoading(false);
-        }
+    const handleBatchDelete = () => {
+        toast({
+            title: "¿Confirmar Acción Masiva?",
+            description: `Se eliminarán ${selectedIds.length} productos permanentemente.`,
+            variant: "destructive",
+            duration: Infinity,
+            action: (
+                <ToastAction
+                    altText="ELIMINAR"
+                    onClick={async () => {
+                        setBatchLoading(true);
+                        try {
+                            await fetchFromAPI('/api/v1/products/batch-delete', {
+                                method: 'POST',
+                                body: JSON.stringify(selectedIds)
+                            });
+                            toast({ title: "Acción Completada", description: "Varios ítems han sido removido del catálogo." });
+                            setSelectedIds([]);
+                            loadData();
+                        } catch (err: any) {
+                            toast({ title: "Error en Batch", description: err.message, variant: "destructive" });
+                        } finally {
+                            setBatchLoading(false);
+                        }
+                    }}
+                >
+                    ELIMINAR
+                </ToastAction>
+            )
+        });
     };
 
     const handleExport = async () => {
         try {
             const { data: { session } } = await supabase.auth.getSession();
             const token = session?.access_token;
-            const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const baseUrl = process.env.NEXT_PUBLIC_API_URL;
 
             const response = await fetch(`${baseUrl}/api/v1/products/export`, {
                 headers: {
@@ -195,38 +218,48 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
             a.click();
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
+            toast({ title: "✅ Exportación Iniciada", description: "El archivo CSV se ha generado correctamente." });
         } catch (err: any) {
-            console.error('Failed to export:', err);
-            const msg = err instanceof Error ? err.message : String(err);
-            alert(msg || 'Error al exportar el catálogo');
+            toast({
+                title: "Error al exportar",
+                description: err.message || "No se pudo generar el archivo.",
+                variant: "destructive"
+            });
         }
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm("¿Está seguro de eliminar este producto del catálogo?")) return;
-
-        const previousProducts = [...products];
-        setProducts(prev => prev.filter(p => p.id !== id));
-
-        setActionLoading(true);
-        try {
-            await fetchFromAPI(`/api/v1/products/${id}`, {
-                method: 'DELETE'
-            });
-        } catch (err: any) {
-            console.error(err);
-            alert(err.message || "Error al eliminar el producto");
-            setProducts(previousProducts);
-        } finally {
-            setActionLoading(false);
-        }
+    const handleDelete = (id: string) => {
+        toast({
+            title: "¿Eliminar Producto?",
+            description: "Esta acción removerá el ítem de forma permanente.",
+            variant: "destructive",
+            duration: Infinity,
+            action: (
+                <ToastAction
+                    altText="ELIMINAR"
+                    onClick={async () => {
+                        const previousProducts = [...products];
+                        setProducts(prev => prev.filter(p => p.id !== id));
+                        try {
+                            await fetchFromAPI(`/api/v1/products/${id}`, { method: 'DELETE' });
+                            toast({ title: "Producto Eliminado", description: "Catálogo actualizado." });
+                        } catch (err: any) {
+                            toast({ title: "Error", description: err.message, variant: "destructive" });
+                            setProducts(previousProducts);
+                        }
+                    }}
+                >
+                    ELIMINAR
+                </ToastAction>
+            )
+        });
     };
 
     const listProductTemplate = async () => {
         try {
             const { data: { session } } = await supabase.auth.getSession();
             const token = session?.access_token;
-            const baseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const baseUrl = process.env.NEXT_PUBLIC_API_URL;
 
             const response = await fetch(`${baseUrl}/api/v1/products/template`, {
                 headers: {
@@ -246,9 +279,11 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
             window.URL.revokeObjectURL(url);
             document.body.removeChild(a);
         } catch (err: any) {
-            console.error("Error downloading template:", err);
-            const msg = err instanceof Error ? err.message : String(err);
-            alert(msg || "No se pudo descargar la plantilla.");
+            toast({
+                title: "Error",
+                description: err.message || "No se pudo descargar la plantilla.",
+                variant: "destructive"
+            });
         }
     };
 
@@ -268,10 +303,18 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
                 isFormData: true
             });
             setImportResult(result);
+            toast({
+                title: "Importación Finalizada",
+                description: `Proceso completado. Revise el resumen de resultados.`,
+            });
             loadData();
         } catch (err: any) {
-            console.error(err);
-            alert(err.message || "Error al importar el archivo");
+            toast({
+                title: "Falla en Importación",
+                description: err.message || "Error al procesar el archivo CSV.",
+                variant: "destructive",
+                duration: 10000
+            });
         } finally {
             setImportLoading(false);
             e.target.value = ''; // Reset input
@@ -282,14 +325,14 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
         <div className="">
             <div className="px-4 py-2 flex justify-between items-center mb-2">
                 <div className="flex items-center gap-4 flex-1">
-                    <h3 className="text-[11px] font-bold text-gray-900 uppercase tracking-widest text-[#001741] whitespace-nowrap">PRODUCTOS EN SISTEMA</h3>
+                    <h3 className="text-[11px] font-bold text-gray-900 dark:text-slate-100 uppercase tracking-widest text-[#001741] whitespace-nowrap">PRODUCTOS EN SISTEMA</h3>
                     <div className="relative w-64 group">
                         <input
                             type="text"
                             placeholder="BUSCAR SKU, PRODUCTO O FAMILIA..."
                             value={localSearch}
                             onChange={(e) => setLocalSearch(e.target.value)}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-md py-1.5 pl-8 pr-3 text-[10px] font-bold text-gray-900 focus:bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-50 outline-none transition-all uppercase placeholder:text-gray-400"
+                            className="w-full bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-800 rounded-md py-1.5 pl-8 pr-3 text-[10px] font-bold text-gray-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:border-blue-600 focus:ring-4 focus:ring-blue-50 dark:focus:ring-blue-900/20 outline-none transition-all uppercase placeholder:text-gray-400"
                         />
                         <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 group-focus-within:text-blue-600 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -297,63 +340,71 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button
-                        onClick={handleExport}
-                        className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-gray-600 border border-gray-200 rounded-md hover:bg-gray-50 transition-all uppercase tracking-wider"
-                    >
-                        <ArrowUpTrayIcon className="w-3.5 h-3.5" />
-                        Exportar Todo
-                    </button>
-                    <button
-                        onClick={() => listProductTemplate()}
-                        className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-blue-600 border border-blue-200 rounded-md hover:bg-blue-50 transition-all uppercase tracking-wider"
-                    >
-                        <ArrowDownTrayIcon className="w-3.5 h-3.5" />
-                        Plantilla
-                    </button>
-                    <button
-                        onClick={() => setIsImportModalOpen(true)}
-                        className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-white bg-[#001741] rounded-md hover:bg-black transition-all uppercase tracking-wider shadow-sm"
-                    >
-                        <CloudArrowUpIcon className="w-3.5 h-3.5" />
-                        Carga Masiva
-                    </button>
+                    {can('config_products', 'products', 'export') && (
+                        <button
+                            onClick={handleExport}
+                            className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-800 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 transition-all uppercase tracking-wider"
+                        >
+                            <ArrowUpTrayIcon className="w-3.5 h-3.5" />
+                            Exportar Todo
+                        </button>
+                    )}
+                    {can('config_products', 'products', 'import') && (
+                        <button
+                            onClick={() => listProductTemplate()}
+                            className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900/30 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all uppercase tracking-wider"
+                        >
+                            <ArrowDownTrayIcon className="w-3.5 h-3.5" />
+                            Plantilla
+                        </button>
+                    )}
+                    {can('config_products', 'products', 'import') && (
+                        <button
+                            onClick={() => setIsImportModalOpen(true)}
+                            className="flex items-center gap-2 px-3 py-1.5 text-[10px] font-bold text-white bg-[#001741] dark:bg-slate-800 dark:border dark:border-slate-700 rounded-md hover:bg-black dark:hover:bg-slate-750 transition-all uppercase tracking-wider shadow-sm"
+                        >
+                            <CloudArrowUpIcon className="w-3.5 h-3.5" />
+                            Carga Masiva
+                        </button>
+                    )}
                 </div>
             </div>
 
             {selectedIds.length > 0 && (
-                <div className="bg-red-50 border-y border-red-100 px-6 py-2.5 flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300">
-                    <div className="flex items-center gap-3">
+                <div className="bg-red-50 dark:bg-red-900/10 border-y border-red-100 dark:border-red-900/30 px-6 py-2.5 flex items-center justify-between animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="flex items-center gap-4">
                         <div className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm">
                             {selectedIds.length}
                         </div>
-                        <p className="text-[11px] font-bold text-red-900 uppercase tracking-tight">Elementos seleccionados para acción masiva</p>
+                        <p className="text-[11px] font-bold text-red-900 dark:text-red-400 uppercase tracking-tight">Elementos seleccionados para acción masiva</p>
                     </div>
                     <div className="flex items-center gap-4">
                         <button
                             onClick={() => setSelectedIds([])}
-                            className="text-[10px] font-bold text-gray-400 hover:text-gray-600 uppercase tracking-widest transition-colors"
+                            className="text-[10px] font-bold text-gray-400 dark:text-slate-500 hover:text-gray-600 dark:hover:text-slate-300 uppercase tracking-widest transition-colors"
                         >
                             Cancelar
                         </button>
-                        <button
-                            onClick={handleBatchDelete}
-                            disabled={batchLoading}
-                            className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider shadow-md shadow-red-200 transition-all active:scale-95 disabled:opacity-50"
-                        >
-                            {batchLoading ? (
-                                <ArrowPathIcon className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                                <TrashIcon className="w-3.5 h-3.5" />
-                            )}
-                            Eliminar Seleccionados
-                        </button>
+                        {can('config_products', 'products', 'delete') && (
+                            <button
+                                onClick={handleBatchDelete}
+                                disabled={batchLoading}
+                                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider shadow-md shadow-red-200 dark:shadow-none transition-all active:scale-95 disabled:opacity-50"
+                            >
+                                {batchLoading ? (
+                                    <ArrowPathIcon className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                    <TrashIcon className="w-3.5 h-3.5" />
+                                )}
+                                Eliminar Seleccionados
+                            </button>
+                        )}
                     </div>
                 </div>
             )}
 
             {error && (
-                <div className="bg-blue-50 text-blue-800 px-4 py-2 text-[9px] font-black uppercase tracking-widest border-b border-blue-100 flex items-center justify-between animate-pulse">
+                <div className="bg-blue-50 dark:bg-blue-900/10 text-blue-800 dark:text-blue-400 px-4 py-2 text-[9px] font-black uppercase tracking-widest border-b border-blue-100 dark:border-blue-900/30 flex items-center justify-between animate-pulse">
                     <div className="flex items-center gap-2">
                         <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
                         {error.includes('Conectando') ? 'Sincronizando Catálogo...' : error}
@@ -367,11 +418,9 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
                 </div>
             )}
 
-            <div className="bg-white">
+            <div className="bg-white dark:bg-slate-900">
                 {loading ? (
-                    <div className="px-4 py-12 text-center text-gray-300 font-bold uppercase text-xs tracking-widest animate-pulse">
-                        Sincronizando catálogo...
-                    </div>
+                    <LoadingState message="Sincronizando catálogo de productos..." />
                 ) : (
                     <ProductsTable
                         data={products}
@@ -413,51 +462,51 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
                 }
                 maxWidth="max-w-4xl"
             >
-                <form onSubmit={handleSave} className="-m-6 flex flex-col bg-white">
+                <form onSubmit={handleSave} className="-m-6 flex flex-col bg-white dark:bg-slate-900">
                     <div className="flex-1 p-6 space-y-6">
                         {/* SECCIÓN 1: DEFINICIÓN COMERCIAL */}
                         <div className="space-y-4">
-                            <div className="border-b border-gray-100 pb-1.5 flex items-center gap-2">
+                            <div className="border-b border-gray-100 dark:border-slate-800 pb-1.5 flex items-center gap-2">
                                 <TagIcon className="w-3.5 h-3.5 text-blue-500" />
-                                <p className="text-[12px] font-black text-gray-400 uppercase tracking-[0.2em]">01. Definición Comercial</p>
+                                <p className="text-[12px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em]">01. Definición Comercial</p>
                             </div>
                             <div className="grid grid-cols-12 gap-4">
                                 <div className="col-span-6 space-y-1">
-                                    <label className="text-[12px] font-bold text-gray-700 uppercase tracking-wider pl-1 font-black">Campaña</label>
-                                    <select required name="campaign_id" defaultValue={editingProduct?.campaign_id || ''} className="w-full bg-white border border-gray-300 rounded-md px-3 h-[38px] text-xs font-bold text-gray-900 focus:border-blue-600 focus:ring-4 focus:ring-blue-50 outline-none appearance-none transition-all uppercase">
-                                        <option value="">Seleccione Campaña</option>
-                                        {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                    <label className="text-[12px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider pl-1 font-black">Campaña</label>
+                                    <select required name="campaign_id" defaultValue={editingProduct?.campaign_id || ''} className="w-full bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-md px-3 h-[38px] text-xs font-bold text-gray-900 dark:text-slate-100 focus:border-blue-600 focus:ring-4 focus:ring-blue-50 dark:focus:ring-blue-900/20 outline-none appearance-none transition-all uppercase">
+                                        <option value="" className="dark:bg-slate-800">Seleccione Campaña</option>
+                                        {campaigns.map(c => <option key={c.id} value={c.id} className="dark:bg-slate-800">{c.name}</option>)}
                                     </select>
                                 </div>
                                 <div className="col-span-6 space-y-1">
-                                    <label className="text-[12px] font-bold text-gray-700 uppercase tracking-wider pl-1 font-black">Familia / Categoría</label>
+                                    <label className="text-[12px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider pl-1 font-black">Familia / Categoría</label>
                                     <input
                                         required
                                         name="family_name"
                                         defaultValue={editingProduct?.family_name || ''}
                                         onChange={(e) => e.target.value = e.target.value.toUpperCase()}
-                                        className="w-full border border-gray-300 rounded-md p-2.5 text-xs font-bold text-gray-900 focus:border-blue-600 focus:ring-4 focus:ring-blue-50 outline-none transition-all uppercase bg-white"
+                                        className="w-full border border-gray-300 dark:border-slate-700 rounded-md p-2.5 text-xs font-bold text-gray-900 dark:text-slate-100 focus:border-blue-600 focus:ring-4 focus:ring-blue-50 dark:focus:ring-blue-900/20 outline-none transition-all uppercase bg-white dark:bg-slate-800"
                                         placeholder="EJE: INTERNET RESIDENCIAL"
                                     />
                                 </div>
                                 <div className="col-span-6 space-y-1">
-                                    <label className="text-[12px] font-bold text-gray-700 uppercase tracking-wider pl-1 font-black">PRODUCTO</label>
+                                    <label className="text-[12px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider pl-1 font-black">PRODUCTO</label>
                                     <input
                                         required
                                         name="name"
                                         defaultValue={editingProduct?.name || ''}
                                         onChange={(e) => e.target.value = e.target.value.toUpperCase()}
-                                        className="w-full border border-gray-300 rounded-md p-2.5 text-xs font-bold text-gray-900 focus:border-blue-600 focus:ring-4 focus:ring-blue-50 outline-none transition-all uppercase bg-white"
+                                        className="w-full border border-gray-300 dark:border-slate-700 rounded-md p-2.5 text-xs font-bold text-gray-900 dark:text-slate-100 focus:border-blue-600 focus:ring-4 focus:ring-blue-50 dark:focus:ring-blue-900/20 outline-none transition-all uppercase bg-white dark:bg-slate-800"
                                         placeholder="EJE: FIBRA ÓPTICA 500MB"
                                     />
                                 </div>
                                 <div className="col-span-6 space-y-1">
-                                    <label className="text-[12px] font-bold text-gray-700 uppercase tracking-wider pl-1 font-black">PLAN</label>
+                                    <label className="text-[12px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider pl-1 font-black">PLAN</label>
                                     <input
                                         name="plan_name"
                                         defaultValue={editingProduct?.plan_name || ''}
                                         onChange={(e) => e.target.value = e.target.value.toUpperCase()}
-                                        className="w-full border border-gray-300 rounded-md p-2.5 text-xs font-bold text-gray-900 focus:border-blue-600 focus:ring-4 focus:ring-blue-50 outline-none transition-all uppercase bg-white"
+                                        className="w-full border border-gray-300 dark:border-slate-700 rounded-md p-2.5 text-xs font-bold text-gray-900 dark:text-slate-100 focus:border-blue-600 focus:ring-4 focus:ring-blue-50 dark:focus:ring-blue-900/20 outline-none transition-all uppercase bg-white dark:bg-slate-800"
                                         placeholder="EJE: PLAN_HFC_500"
                                     />
                                 </div>
@@ -466,27 +515,27 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
 
                         {/* SECCIÓN 2: VALORES Y COMISIONES */}
                         <div className="space-y-4">
-                            <div className="border-b border-gray-100 pb-1.5 flex items-center gap-2">
-                                <CurrencyDollarIcon className="w-3.5 h-3.5 text-green-600" />
-                                <p className="text-[12px] font-black text-gray-400 uppercase tracking-[0.2em]">02. Valores e Incentivos</p>
+                            <div className="border-b border-gray-100 dark:border-slate-800 pb-1.5 flex items-center gap-2">
+                                <CurrencyDollarIcon className="w-3.5 h-3.5 text-green-600 dark:text-green-500" />
+                                <p className="text-[12px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em]">02. Valores e Incentivos</p>
                             </div>
                             <div className="grid grid-cols-12 gap-4">
                                 <div className="col-span-4 space-y-1">
-                                    <label className="text-[12px] font-bold text-gray-700 uppercase tracking-wider pl-1 font-black text-green-700 tracking-tight">Venta Base ($)</label>
-                                    <input required type="number" step="0.01" name="current_price" defaultValue={editingProduct?.current_price || 0} className="w-full border border-gray-300 rounded-md p-2.5 text-sm font-black text-gray-900 focus:border-green-600 focus:ring-4 focus:ring-green-50 outline-none transition-all bg-green-50/10" />
+                                    <label className="text-[12px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider pl-1 font-black text-green-700 dark:text-green-500 tracking-tight">Venta Base ($)</label>
+                                    <input required type="number" step="0.01" name="current_price" defaultValue={editingProduct?.current_price || 0} className="w-full border border-gray-300 dark:border-slate-700 rounded-md p-2.5 text-sm font-black text-gray-900 dark:text-slate-100 focus:border-green-600 focus:ring-4 focus:ring-green-50 dark:focus:ring-green-900/20 outline-none transition-all bg-green-50/10 dark:bg-green-900/10" />
                                 </div>
                                 <div className="col-span-4 space-y-1">
-                                    <label className="text-[12px] font-bold text-gray-700 uppercase tracking-wider pl-1 font-black text-blue-700 tracking-tight">Comisión ($)</label>
-                                    <input required type="number" step="0.01" name="incentive" defaultValue={editingProduct?.incentive || 0} className="w-full border border-gray-300 rounded-md p-2.5 text-sm font-black text-gray-900 focus:border-blue-600 focus:ring-4 focus:ring-blue-50 outline-none transition-all bg-blue-50/10" />
+                                    <label className="text-[12px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider pl-1 font-black text-blue-700 dark:text-blue-500 tracking-tight">Comisión ($)</label>
+                                    <input required type="number" step="0.01" name="incentive" defaultValue={editingProduct?.incentive || 0} className="w-full border border-gray-300 dark:border-slate-700 rounded-md p-2.5 text-sm font-black text-gray-900 dark:text-slate-100 focus:border-blue-600 focus:ring-4 focus:ring-blue-50 dark:focus:ring-blue-900/20 outline-none transition-all bg-blue-50/10 dark:bg-blue-900/10" />
                                 </div>
                                 <div className="col-span-4 flex items-end pb-0.5">
-                                    <label className="flex items-center gap-3 cursor-pointer select-none group w-full bg-gray-50 border border-gray-200 rounded-md h-[40px] px-4">
+                                    <label className="flex items-center gap-3 cursor-pointer select-none group w-full bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-800 rounded-md h-[40px] px-4">
                                         <div className="relative">
                                             <input type="checkbox" name="is_active" defaultChecked={editingProduct ? editingProduct.is_active : true} className="peer hidden" />
-                                            <div className="w-8 h-4 bg-gray-200 rounded-full border border-gray-300 peer-checked:bg-green-500 peer-checked:border-green-600 transition-all" />
+                                            <div className="w-8 h-4 bg-gray-200 dark:bg-slate-700 rounded-full border border-gray-300 dark:border-slate-600 peer-checked:bg-green-500 peer-checked:border-green-600 transition-all" />
                                             <div className="absolute left-0.5 top-0.5 w-3 h-3 bg-white rounded-full peer-checked:translate-x-4 transition-all shadow-sm" />
                                         </div>
-                                        <span className="text-[13px] font-black text-gray-900 uppercase group-hover:text-blue-600 transition-colors tracking-tight">Habilitado</span>
+                                        <span className="text-[13px] font-black text-gray-900 dark:text-slate-100 uppercase group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors tracking-tight">Habilitado</span>
                                     </label>
                                 </div>
                             </div>
@@ -494,27 +543,27 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
 
                         {/* SECCIÓN 3: PARAMETRÍA TÉCNICA */}
                         <div className="space-y-4">
-                            <div className="border-b border-gray-100 pb-1.5 flex items-center gap-2">
-                                <PresentationChartLineIcon className="w-3.5 h-3.5 text-gray-900" />
-                                <p className="text-[12px] font-black text-gray-400 uppercase tracking-[0.2em]">03. Parametría Técnica</p>
+                            <div className="border-b border-gray-100 dark:border-slate-800 pb-1.5 flex items-center gap-2">
+                                <PresentationChartLineIcon className="w-3.5 h-3.5 text-gray-900 dark:text-slate-100" />
+                                <p className="text-[12px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-[0.2em]">03. Parametría Técnica</p>
                             </div>
                             <div className="grid grid-cols-12 gap-4">
                                 <div className="col-span-6 space-y-1">
-                                    <label className="text-[12px] font-bold text-gray-700 uppercase tracking-wider pl-1 font-black">Referencia PP / SKU</label>
+                                    <label className="text-[12px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider pl-1 font-black">Referencia PP / SKU</label>
                                     <input
                                         name="current_pp"
                                         defaultValue={editingProduct?.current_pp || ''}
                                         onChange={(e) => e.target.value = e.target.value.toUpperCase()}
-                                        className="w-full border border-gray-300 rounded-md p-2.5 text-xs font-mono font-bold text-gray-900 focus:border-gray-900 focus:ring-4 focus:ring-gray-100 outline-none transition-all uppercase"
+                                        className="w-full border border-gray-300 dark:border-slate-700 rounded-md p-2.5 text-xs font-mono font-bold text-gray-900 dark:text-slate-100 focus:border-gray-900 focus:ring-4 focus:ring-gray-100 dark:focus:ring-slate-800 outline-none transition-all uppercase bg-white dark:bg-slate-800"
                                         placeholder="EJE: PP-CLR-500"
                                     />
                                 </div>
                                 <div className="col-span-6 space-y-1">
-                                    <label className="text-[12px] font-bold text-gray-700 uppercase tracking-wider pl-1 font-black">Concepto Factura</label>
+                                    <label className="text-[12px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider pl-1 font-black">Concepto Factura</label>
                                     <input
                                         name="current_concept"
                                         defaultValue={editingProduct?.current_concept || ''}
-                                        className="w-full border border-gray-300 rounded-md p-2.5 text-xs font-bold text-gray-900 focus:border-blue-600 focus:ring-4 focus:ring-blue-50 outline-none transition-all"
+                                        className="w-full border border-gray-300 dark:border-slate-700 rounded-md p-2.5 text-xs font-bold text-gray-900 dark:text-slate-100 focus:border-blue-600 focus:ring-4 focus:ring-blue-50 dark:focus:ring-blue-900/20 outline-none transition-all bg-white dark:bg-slate-800"
                                         placeholder="EJE: PLAN INTERNET"
                                     />
                                 </div>
@@ -522,14 +571,14 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
                         </div>
                     </div>
 
-                    <div className="flex justify-between items-center p-5 bg-gray-50 border-t border-gray-200 shrink-0 px-8">
+                    <div className="flex justify-between items-center p-5 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-800 shrink-0 px-8">
                         <div className="flex items-center gap-2">
                             <div className={`w-2.5 h-2.5 rounded-full ${editingProduct?.is_active ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
-                            <span className="text-[12px] font-black text-gray-500 uppercase tracking-widest leading-none">Status en Catálogo Maestro</span>
+                            <span className="text-[12px] font-black text-gray-500 dark:text-slate-400 uppercase tracking-widest leading-none">Status en Catálogo Maestro</span>
                         </div>
                         <div className="flex gap-4">
-                            <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 h-10 text-xs font-bold text-gray-400 uppercase hover:text-gray-900 transition-colors">Cancelar</button>
-                            <button disabled={actionLoading} type="submit" className="bg-gray-900 hover:bg-black text-white px-10 h-10 rounded-md text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-gray-200 active:scale-95 disabled:opacity-50">
+                            <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 h-10 text-xs font-bold text-gray-400 dark:text-slate-500 uppercase hover:text-gray-900 dark:hover:text-slate-300 transition-colors">Cancelar</button>
+                            <button disabled={actionLoading} type="submit" className="bg-gray-900 dark:bg-slate-700 hover:bg-black dark:hover:bg-slate-600 text-white px-10 h-10 rounded-md text-xs font-bold uppercase tracking-widest transition-all shadow-lg shadow-gray-200 dark:shadow-none active:scale-95 disabled:opacity-50">
                                 {actionLoading ? 'Actualizando...' : (editingProduct ? 'Aplicar Cambios' : 'Confirmar Nuevo SKU')}
                             </button>
                         </div>
@@ -552,16 +601,16 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
                 }
                 maxWidth="max-w-2xl"
             >
-                <div className="p-6 bg-white -m-6 flex flex-col gap-6">
+                <div className="p-6 bg-white dark:bg-slate-900 -m-6 flex flex-col gap-6">
                     {!importResult ? (
                         <div className="space-y-6">
-                            <div className="p-12 border-2 border-dashed border-gray-200 rounded-xl bg-gray-50 flex flex-col items-center justify-center gap-4 text-center">
-                                <div className="p-4 bg-white rounded-full shadow-sm border border-gray-100">
+                            <div className="p-12 border-2 border-dashed border-gray-200 dark:border-slate-800 rounded-xl bg-gray-50 dark:bg-slate-800/20 flex flex-col items-center justify-center gap-4 text-center">
+                                <div className="p-4 bg-white dark:bg-slate-900 rounded-full shadow-sm border border-gray-100 dark:border-slate-800">
                                     <CloudArrowUpIcon className="w-8 h-8 text-blue-500" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-bold text-gray-900 uppercase">Seleccione el archivo CSV</p>
-                                    <p className="text-[10px] text-gray-500 font-medium mt-1">Asegúrese de usar el formato de la plantilla oficial</p>
+                                    <p className="text-sm font-bold text-gray-900 dark:text-slate-100 uppercase">Seleccione el archivo CSV</p>
+                                    <p className="text-[10px] text-gray-500 dark:text-slate-400 font-medium mt-1">Asegúrese de usar el formato de la plantilla oficial</p>
                                 </div>
                                 <input
                                     type="file"
@@ -577,13 +626,13 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
                                     </div>
                                 )}
                             </div>
-                            <div className="bg-blue-50 border border-blue-100 p-4 rounded-lg flex gap-3">
+                            <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 p-4 rounded-lg flex gap-3">
                                 <ExclamationTriangleIcon className="w-5 h-5 text-blue-500 shrink-0" />
                                 <div className="space-y-1">
-                                    <p className="text-[10px] font-black text-blue-900 uppercase">Instrucciones Importantes</p>
-                                    <ul className="text-[10px] text-blue-800 space-y-1 list-disc pl-4 font-medium uppercase tracking-tight">
+                                    <p className="text-[10px] font-black text-blue-900 dark:text-blue-400 uppercase">Instrucciones Importantes</p>
+                                    <ul className="text-[10px] text-blue-800 dark:text-blue-500 space-y-1 list-disc pl-4 font-medium uppercase tracking-tight">
                                         <li>No cambie los encabezados de la plantilla.</li>
-                                        <li>La combinación de <span className="font-black text-blue-900">"Campaña + Referencia PP"</span> es el identificador único para actualizaciones.</li>
+                                        <li>La combinación de <span className="font-black text-blue-900 dark:text-blue-400">"Campaña + Referencia PP"</span> es el identificador único para actualizaciones.</li>
                                         <li>Los precios e incentivos deben ser números sin símbolos de moneda.</li>
                                     </ul>
                                 </div>
@@ -591,7 +640,7 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
                         </div>
                     ) : (
                         <div className="space-y-6">
-                            <div className={`p-4 rounded-xl border ${importResult.error_count === 0 ? 'bg-green-50 border-green-200' : 'bg-orange-50 border-orange-200'}`}>
+                            <div className={`p-4 rounded-xl border ${importResult.error_count === 0 ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-900/30' : 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-900/30'}`}>
                                 <div className="flex items-center gap-3">
                                     {importResult.error_count === 0 ? (
                                         <CheckCircleIcon className="w-6 h-6 text-green-500" />
@@ -599,10 +648,10 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
                                         <ExclamationTriangleIcon className="w-6 h-6 text-orange-500" />
                                     )}
                                     <div>
-                                        <p className={`text-sm font-black uppercase ${importResult.error_count === 0 ? 'text-green-900' : 'text-orange-900'}`}>
+                                        <p className={`text-sm font-black uppercase ${importResult.error_count === 0 ? 'text-green-900 dark:text-green-400' : 'text-orange-900 dark:text-orange-400'}`}>
                                             {importResult.error_count === 0 ? 'Importación Exitosa' : 'Importación con Advertencias'}
                                         </p>
-                                        <p className="text-[10px] font-bold text-gray-600 uppercase">
+                                        <p className="text-[10px] font-bold text-gray-600 dark:text-slate-400 uppercase">
                                             {importResult.success_count} productos procesados correctamente.
                                         </p>
                                     </div>
@@ -611,22 +660,22 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
 
                             {importResult.errors.length > 0 && (
                                 <div className="space-y-3">
-                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Detalle de Errores ({importResult.error_count})</p>
-                                    <div className="max-h-[300px] overflow-y-auto border border-gray-200 rounded-lg shadow-inner">
+                                    <p className="text-[10px] font-black text-gray-400 dark:text-slate-500 uppercase tracking-widest pl-1">Detalle de Errores ({importResult.error_count})</p>
+                                    <div className="max-h-[300px] overflow-y-auto border border-gray-200 dark:border-slate-800 rounded-lg shadow-inner">
                                         <table className="w-full text-left text-[10px]">
-                                            <thead className="bg-gray-50 text-gray-500 font-black uppercase sticky top-0">
+                                            <thead className="bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-slate-400 font-black uppercase sticky top-0">
                                                 <tr>
-                                                    <th className="px-3 py-2 border-b">Fila</th>
-                                                    <th className="px-3 py-2 border-b">Columna</th>
-                                                    <th className="px-3 py-2 border-b">Mensaje de Error</th>
+                                                    <th className="px-3 py-2 border-b dark:border-slate-700">Fila</th>
+                                                    <th className="px-3 py-2 border-b dark:border-slate-700">Columna</th>
+                                                    <th className="px-3 py-2 border-b dark:border-slate-700">Mensaje de Error</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-gray-100 uppercase">
+                                            <tbody className="divide-y divide-gray-100 dark:divide-slate-800 uppercase">
                                                 {importResult.errors.map((error: any, idx: number) => (
-                                                    <tr key={idx} className="hover:bg-red-50/50">
-                                                        <td className="px-3 py-2 font-mono font-bold text-gray-500">{error.row}</td>
-                                                        <td className="px-3 py-2 font-bold text-gray-700">{error.column}</td>
-                                                        <td className="px-3 py-2 text-red-600 font-bold">{error.message}</td>
+                                                    <tr key={idx} className="hover:bg-red-50/50 dark:hover:bg-red-900/10">
+                                                        <td className="px-3 py-2 font-mono font-bold text-gray-500 dark:text-slate-400">{error.row}</td>
+                                                        <td className="px-3 py-2 font-bold text-gray-700 dark:text-slate-300">{error.column}</td>
+                                                        <td className="px-3 py-2 text-red-600 dark:text-red-400 font-bold">{error.message}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -637,7 +686,7 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
 
                             <button
                                 onClick={() => { setIsImportModalOpen(false); setImportResult(null); }}
-                                className="w-full py-3 bg-gray-900 text-white rounded-lg text-xs font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95"
+                                className="w-full py-3 bg-gray-900 dark:bg-slate-700 text-white rounded-lg text-xs font-black uppercase tracking-widest hover:bg-black dark:hover:bg-slate-600 transition-all shadow-lg dark:shadow-none active:scale-95"
                             >
                                 Entendido
                             </button>

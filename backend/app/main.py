@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 import time
 import logging
+from app.core.database import engine, Base
 
 # Configure logging
 logging.basicConfig(
@@ -18,7 +19,7 @@ from app.models import *
 from app.api.api_v1.endpoints import (
     auth, users, sales, goals, config, campaigns, products, 
     organizations, statuses, permissions, policies, analytics,
-    campaign_performance
+    campaign_performance, finance, selectors, ops, tournaments
 )
 
 # --- IMPORTACIÓN QUIRÚRGICA (BYPASS DE EMERGENCIA) ---
@@ -33,15 +34,39 @@ app = FastAPI(
     description="Backend de alta concurrencia con FastAPI y Supabase"
 )
 
+# --- GLOBAL OPS STATE ---
+app.state.error_count_500 = 0
+
+# Static File Serving (Backups)
+from fastapi.staticfiles import StaticFiles
+import os
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if not os.path.exists(static_dir):
+    os.makedirs(static_dir, exist_ok=True)
+exports_dir = os.path.join(static_dir, "exports")
+if not os.path.exists(exports_dir):
+    os.makedirs(exports_dir, exist_ok=True)
+
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 # Add rate limiting state and exception handler
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
-# Configuración de CORS (Seguridad)
-origins = [
-    "http://localhost:3000", # Next.js local
-    "*" 
-]
+@app.on_event("startup")
+async def on_startup():
+    # Asegurar que las tablas existan en el primer arranque (Zero-Touch Prod)
+    logger.info("🚀 [STARTUP] Inicializando infraestructura de Base de Datos...")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    logger.info("✅ [STARTUP] Tablas sincronizadas correctamente.")
+
+# Configuración de CORS (Seguridad de Grado Producción)
+allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "*")
+if allowed_origins_raw == "*":
+    origins = ["*"]
+else:
+    origins = [o.strip() for o in allowed_origins_raw.split(",")]
 
 app.add_middleware(
     CORSMiddleware,
@@ -62,8 +87,14 @@ async def log_requests(request: Request, call_next):
         response = await call_next(request)
         process_time = time.time() - start_time
         print(f"[RESPONSE] {response.status_code} | Time: {process_time:.3f}s")
+        
+        # Track 500 errors
+        if response.status_code == 500:
+            app.state.error_count_500 += 1
+            
         return response
     except Exception as e:
+        app.state.error_count_500 += 1
         import traceback
         error_msg = f"[CRASH] {request.method} {request.url} | Error: {str(e)}"
         print(error_msg)
@@ -95,6 +126,9 @@ app.include_router(statuses.router, prefix="/api/v1/statuses", tags=["statuses"]
 app.include_router(permissions.router, prefix="/api/v1/permissions", tags=["permissions"])
 app.include_router(policies.router, prefix="/api/v1/policies", tags=["policies"])
 app.include_router(campaign_performance.router, prefix="/api/v1/campaign-performance", tags=["campaign-performance"])
+app.include_router(finance.router, prefix="/api/v1/finance", tags=["finance"])
+app.include_router(selectors.router, prefix="/api/v1/selectors", tags=["selectors"])
+app.include_router(ops.router, prefix="/api/v1/ops", tags=["ops"])
 
 # --- INYECCIÓN DIRECTA DE LA RUTA DE RESULTADOS (PRUEBA DEL GRITO) ---
 print("\n" + "="*60)
@@ -109,12 +143,14 @@ try:
     # 2. Registrar la ruta
     app.include_router(results_router, prefix="/api/v1/results", tags=["Resultados Operativos"])
     
-    print(">>> [DEBUG CRÍTICO] ✅ ÉXITO: La instrucción app.include_router se ejecutó sin romper el código.")
+    print(">>> [DEBUG CRITICO] EXITO: La instruccion app.include_router se ejecuto sin romper el codigo.")
 
 except Exception as e:
-    print(f">>> [DEBUG CRÍTICO] ❌ ERROR FATAL AL REGISTRAR: {str(e)}")
+    print(f">>> [DEBUG CRITICO] ERROR FATAL AL REGISTRAR: {str(e)}")
     import traceback
     traceback.print_exc()
+
+app.include_router(tournaments.router, prefix="/api/v1/tournaments", tags=["tournaments"])
 
 print("="*60 + "\n")
 

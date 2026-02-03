@@ -4,8 +4,15 @@ import { useState } from 'react';
 import CreateSaleForm from '@/components/CreateSaleForm';
 import Modal from '@/components/Modal';
 
+import { usePermission } from '@/hooks/usePermission';
+
 export default function SalesActions() {
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const { can } = usePermission();
+
+    if (!can('sales', 'create')) {
+        return null;
+    }
 
     return (
         <>

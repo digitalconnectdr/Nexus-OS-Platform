@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, text, or_, func
+from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from app.api.deps import get_db
 from app.models.core import UserProfile, RolePermission
@@ -12,6 +13,7 @@ from app.schemas.core import (
     UserProfileOut, UserProfileBase, UserIdentityCreate, 
     UserRole, UserPasswordUpdate, PaginatedResponse
 )
+from .products import get_skills_manifest
 import uuid
 from uuid import UUID
 
@@ -22,49 +24,124 @@ logger = logging.getLogger(__name__)
 async def get_my_profile(
     current_user: UserProfile = Depends(get_current_user)
 ):
+    """Retorna el perfil del usuario actual directamente desde la sesión."""
     return current_user
+
+# TEST ENDPOINT - Simple user count
+@router.get("/test-count")
+async def test_user_count(db: AsyncSession = Depends(get_db)):
+    """Simple endpoint to test if we can query users at all"""
+    try:
+        result = await db.execute(select(UserProfile))
+        all_users = result.scalars().all()
+        return {
+            "total_users": len(all_users),
+            "first_3_emails": [u.email for u in all_users[:3]] if all_users else [],
+            "message": "Database query successful"
+        }
+    except Exception as e:
+        return {"error": str(e), "total_users": 0}
+
+# RAW SQL TEST - Bypass SQLAlchemy ORM completely
+@router.get("/raw-test")
+async def raw_sql_test(db: AsyncSession = Depends(get_db)):
+    """Test using RAW SQL to bypass SQLAlchemy and isolate if error is in ORM or DB"""
+    try:
+        logger.info("=== RAW SQL TEST START ===")
+        query = text("SELECT id, email, role, tenant_id FROM users_profiles WHERE email = 'jcpenalo@gmail.com'")
+        result = await db.execute(query)
+        row = result.fetchone()
+        
+        if row:
+            return {
+                "success": True,
+                "data": {"id": str(row[0]), "email": row[1], "role": row[2], "tenant_id": str(row[3]) if row[3] else None}
+            }
+        return {"success": False, "error": "User not found"}
+    except Exception as e:
+        logger.error(f"RAW SQL ERROR: {type(e).__name__}: {str(e)}")
+        return {"success": False, "error": str(e), "error_type": type(e).__name__}
+
 
 @router.get("/", response_model=PaginatedResponse[UserProfileOut])
 async def list_users(
-    params: CommonQueryParams = Depends(),
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=500),
+    search: Optional[str] = Query(None),
+    sort_by: Optional[str] = Query(None),
+    include_deleted: bool = Query(False),
+    include_inactive: bool = Query(True),
     role: Optional[str] = Query(None),
-    include_deleted: bool = Query(False, description="Incluir usuarios marcados como eliminados"),
-    include_inactive: bool = False,
     db: AsyncSession = Depends(get_db),
-    _: bool = Depends(check_permission("users", "read"))
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("users", "read", module="config_users"))
 ):
-    # Base query for UserProfile
-    query = select(UserProfile)
+    """Listado de usuarios vía SQLAlchemy Directo (Aislamiento Multi-tenant)"""
+    logger.info(f"🚀 Loading users via SQLAlchemy: page={page}, size={size}, search={search}")
     
-    if not include_deleted:
-        query = query.where(UserProfile.is_deleted == False)
-    
-    if not include_inactive:
-        query = query.where(UserProfile.is_active == True)
+    try:
+        # 1. Base query con carga ansiosa de organización
+        stmt = select(UserProfile).where(UserProfile.tenant_id == current_user.tenant_id).options(selectinload(UserProfile.organization))
         
-    if role:
-        query = query.where(UserProfile.role == role)
-    
-    # Define fields for search filter
-    search_fields = ["email", "first_name", "last_name"]
-    
-    # Use the utility to apply pagination, search and sort
-    pagination_result = await apply_pagination_logic(
-        db=db,
-        model=UserProfile,
-        params=params,
-        base_query=query,
-        search_fields=search_fields
-    )
-    
-    return pagination_result
+        # 2. Filtros de jerarquía
+        if current_user.role != UserRole.SUPER_ADMIN:
+            stmt = stmt.where(UserProfile.role != UserRole.SUPER_ADMIN)
+
+        # 3. Filtros adicionales
+        if not include_deleted:
+            stmt = stmt.where(UserProfile.is_deleted == False)
+        
+        if not include_inactive:
+            stmt = stmt.where(UserProfile.is_active == True)
+            
+        if role:
+            stmt = stmt.where(UserProfile.role == role)
+        
+        if search:
+            search_clause = or_(
+                UserProfile.email.ilike(f"%{search}%"),
+                UserProfile.first_name.ilike(f"%{search}%"),
+                UserProfile.last_name.ilike(f"%{search}%")
+            )
+            stmt = stmt.where(search_clause)
+
+        # 4. Conteo total (antes de paginación)
+        count_stmt = select(func.count()).select_from(stmt.subquery())
+        total_count_res = await db.execute(count_stmt)
+        total_count = total_count_res.scalar() or 0
+
+        # 5. Orden y Paginación
+        stmt = stmt.order_by(UserProfile.last_seen_at.desc().nulls_last())
+        stmt = stmt.offset((page - 1) * size).limit(size)
+
+        # 6. Ejecutar
+        result = await db.execute(stmt)
+        users = result.scalars().all()
+
+        # Enriquecer para el schema (UserProfileOut espera organization_name)
+        for u in users:
+            if u.organization:
+                setattr(u, 'organization_name', u.organization.name)
+
+        return PaginatedResponse(
+            total=total_count,
+            page=page,
+            size=size,
+            items=users
+        )
+    except Exception as e:
+        logger.error(f"Error fetching users via SQLAlchemy: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error al recuperar lista de usuarios. ||| TECH_DETAILS: {str(e)}"
+        )
 
 @router.post("/", response_model=UserProfileOut)
 async def create_user(
     user_in: UserIdentityCreate,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("users", "write"))
+    _: bool = Depends(check_permission("users", "create", module="config_users"))
 ):
     # 1. Obtener niveles
     creator_level = get_role_level(current_user.role)
@@ -72,12 +149,19 @@ async def create_user(
 
     # 2. Regla de Oro: Solo Super Admin puede violar jerarquías.
     # El resto NO puede crear a alguien de nivel igual o superior.
+    
+    # NUEVA REGLA DE SEGURIDAD (User Request):
+    # Un Admin (o inferior) NUNCA puede crear un Super Admin.
+    if user_in.role == UserRole.SUPER_ADMIN and current_user.role != UserRole.SUPER_ADMIN:
+        raise HTTPException(
+            status_code=403, 
+            detail="Acción denegada: Tu nivel de privilegios no permite crear usuarios con el rol 'Super Admin'."
+        )
+
+    # NUEVA REGLA DE SEGURIDAD (Multi-tenant):
+    # Forzar el tenant_id del creador para evitar inyección de usuarios en otras orgs.
     if current_user.role != UserRole.SUPER_ADMIN:
-        if new_user_role_level >= creator_level:
-            raise HTTPException(
-                status_code=403, 
-                detail="Acceso Denegado: Tu nivel de autoridad no permite crear usuarios con el rol de 'Super Admin' o superior al tuyo."
-            )
+        user_in.tenant_id = current_user.tenant_id
     try:
         # 1. Crear identidad en Supabase Auth (Nube)
         # Usamos el Admin API para evitar validaciones de email si se prefiere
@@ -123,12 +207,12 @@ async def create_user(
         if "already been registered" in error_str:
             raise HTTPException(
                 status_code=400,
-                detail="Este correo electrónico ya está registrado en el sistema. Si el usuario fue eliminado, puedes reactivarlo desde la Gestión de Usuarios."
+                detail="Este correo electrónico ya está registrado en el sistema. Si el usuario fue eliminado, puede reactivarlo desde la Gestión de Usuarios."
             )
             
         raise HTTPException(
             status_code=500, 
-            detail=f"Error interno al crear perfil: {error_str}"
+            detail=f"Hubo un problema interno al crear el perfil de usuario. Por favor, contacte a soporte. ||| TECH_DETAILS: {str(e)}"
         )
 
 @router.patch("/{user_id}", response_model=UserProfileOut)
@@ -137,124 +221,100 @@ async def update_user(
     user_in: UserProfileBase, # Partial updates
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("users", "write"))
+    _: bool = Depends(check_permission("users", "update", module="config_users"))
 ):
-    result = await db.execute(select(UserProfile).where(UserProfile.id == user_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    """Actualización de usuario vía SQLAlchemy (Aislamiento Estricto)"""
+    # 1. Localizar usuario
+    stmt = select(UserProfile).where(UserProfile.id == user_id)
+    if current_user.role != UserRole.SUPER_ADMIN:
+        stmt = stmt.where(UserProfile.tenant_id == current_user.tenant_id)
     
+    res = await db.execute(stmt)
+    db_user = res.scalar_one_or_none()
+    
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado en su organización.")
+
     # --- VALIDACIÓN DE JERARQUÍA ---
     creator_level = get_role_level(current_user.role)
-    target_user_level = get_role_level(user.role)
+    target_user_level = get_role_level(db_user.role)
 
-    # REGLA A: Protección de Destino (No puedo tocar a mis superiores)
     if current_user.role != UserRole.SUPER_ADMIN:
         if target_user_level >= creator_level:
-             raise HTTPException(
-                 status_code=403, 
-                 detail="No puedes editar este perfil: El usuario tiene un rango igual o superior al tuyo."
-             )
+             raise HTTPException(status_code=403, detail="Jerarquía insuficiente para editar este perfil.")
 
-    # REGLA B: Protección de Ascenso (No puedo ascender a nadie por encima de mí)
-    if user_in.role is not None:
-        new_role_level = get_role_level(user_in.role)
-        if current_user.role != UserRole.SUPER_ADMIN:
-            if new_role_level >= creator_level:
-                raise HTTPException(
-                    status_code=403, 
-                    detail="Operación rechazada: No tienes permisos para ascender a un usuario a un nivel igual o superior al tuyo."
-                )
-    # ------------------------------
+        if user_in.role and get_role_level(user_in.role) >= creator_level:
+            raise HTTPException(status_code=403, detail="No puedes asignar un rol igual o superior al tuyo.")
 
-    # --- VALIDACIÓN CRÍTICA: CAMBIO DE ROL (Permiso Granular) ---
-    if user_in.role is not None and user_in.role != user.role:
-        # El usuario está intentando cambiar el rol. ¿Tiene permiso 'change_role'?
-        has_permission = False
-        if current_user.role == UserRole.SUPER_ADMIN:
-            has_permission = True
-        else:
-            perm_query = select(RolePermission).where(
-                RolePermission.role == current_user.role,
-                RolePermission.resource == "users",
-                RolePermission.action == "change_role",
-                RolePermission.is_allowed == True
-            )
-            result = await db.execute(perm_query)
-            if result.scalar_one_or_none():
-                has_permission = True
-        
-        if not has_permission:
-            raise HTTPException(
-                status_code=403, 
-                detail="No tienes autorización para cambiar el Rol de un usuario."
-            )
-    # ---------------------------------------------
-
+    # --- ACTUALIZACIÓN ---
     update_data = user_in.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        setattr(user, key, value)
     
-    await db.commit()
-    await db.refresh(user)
-    return user
-@router.delete("/{user_id}")
-async def delete_user(
-    user_id: UUID,
-    permanent: bool = Query(False, description="Eliminar permanentemente de la DB y Supabase"),
-    db: AsyncSession = Depends(get_db),
-    _: bool = Depends(check_permission("users", "delete"))
-):
-    result = await db.execute(select(UserProfile).where(UserProfile.id == user_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Si ya estaba marcado como eliminado y se vuelve a borrar, o si se pide permanente
-    if user.is_deleted or permanent:
-        try:
-            # 1. Eliminar de Supabase Auth
-            supabase_admin.auth.admin.delete_user(str(user_id))
-            # 2. Eliminar de DB local (Hard Delete)
-            await db.delete(user)
-            await db.commit()
-            return {"status": "success", "message": "Usuario eliminado permanentemente"}
-        except Exception as e:
-            logger.error(f"Error in permanent deletion: {e}")
-            # Fallback to local delete if Supabase fails (e.g. user already gone there)
-            await db.delete(user)
-            await db.commit()
-            return {"status": "success", "message": "Usuario eliminado localmente"}
+    # Validación de Skills (Blindaje)
+    if "product_skills" in update_data:
+        valid_skills = await get_skills_manifest(current_user=current_user)
+        valid_values = {s["value"] for s in valid_skills}
+        unauthorized = [s for s in update_data["product_skills"] if s not in valid_values]
+        if unauthorized:
+            raise HTTPException(status_code=403, detail=f"Skills no autorizadas: {unauthorized}")
 
-    # Soft Delete (por defecto)
-    user.is_deleted = True
-    user.is_active = False # Desactivar también por seguridad
-    await db.commit()
-    return {"status": "success", "message": "Usuario movido a la lista de eliminados"}
+    for field, value in update_data.items():
+        setattr(db_user, field, value)
+
+    try:
+        await db.commit()
+        await db.refresh(db_user)
+        
+        # Sincronizar Metadata en Auth (Opcional pero recomendado para consistencia en JWT)
+        if user_in.first_name or user_in.last_name or user_in.role:
+            meta = {}
+            if user_in.first_name or user_in.last_name:
+                meta["full_name"] = f"{db_user.first_name} {db_user.last_name}"
+            if user_in.role:
+                meta["role"] = db_user.role
+            try:
+                supabase_admin.auth.admin.update_user_by_id(str(user_id), {"user_metadata": meta})
+            except: pass
+
+        return db_user
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al actualizar: {str(e)}")
 
 @router.post("/{user_id}/reactivate", response_model=UserProfileOut)
 async def reactivate_user(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
-    _: bool = Depends(check_permission("users", "write"))
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("users", "update", module="config_users"))
 ):
-    result = await db.execute(select(UserProfile).where(UserProfile.id == user_id))
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+    """Reactivación de usuario vía SQLAlchemy"""
+    stmt = select(UserProfile).where(UserProfile.id == user_id)
+    if current_user.role != UserRole.SUPER_ADMIN:
+        stmt = stmt.where(UserProfile.tenant_id == current_user.tenant_id)
     
-    user.is_deleted = False
-    user.is_active = True
-    await db.commit()
-    await db.refresh(user)
-    return user
+    res = await db.execute(stmt)
+    db_user = res.scalar_one_or_none()
+    
+    if not db_user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+
+    db_user.is_deleted = False
+    db_user.is_active = True
+    
+    try:
+        await db.commit()
+        await db.refresh(db_user)
+        return db_user
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error en reactivación: {str(e)}")
 
 @router.patch("/{user_id}/password")
 async def update_password(
     user_id: UUID,
     pwd_in: UserPasswordUpdate,
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("users", "write"))
+    _: bool = Depends(check_permission("users", "update", module="config_users"))
 ):
     if pwd_in.password != pwd_in.confirm_password:
         raise HTTPException(status_code=400, detail="Las contraseñas no coinciden")
