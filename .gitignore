@@ -15,7 +15,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# lib/  <-- COMENTADO: Bloqueaba backend/app/lib
+!backend/app/lib/ # Explicit allows app lib
 lib64/
 parts/
 sdist/
