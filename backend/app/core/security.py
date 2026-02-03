@@ -60,6 +60,9 @@ async def get_current_user(
         supabase_id = payload.get("sub")
         if not supabase_id:
             raise HTTPException(status_code=401, detail="Token inválido: ID de usuario no encontrado")
+            
+        # [DEBUG IDENTITY]
+        logger.info(f"🕵️‍♂️ [AUTH DEBUG] Intentando validar usuario: {supabase_id}")
     except jwt.PyJWTError as e:
         logger.warning(f"🔐 Local JWT Validation Failed: {e}")
         raise HTTPException(
@@ -95,7 +98,7 @@ async def get_current_user(
                 await set_session_tenant(db, current_tenant_id)
                 return db_user
             else:
-                logger.error(f"❌ Profile not found in Local DB for {supabase_id}")
+                logger.error(f"❌ [AUTH ERROR] Profile NOT found in table 'users_profiles' for ID: {supabase_id}")
                 raise HTTPException(status_code=401, detail="Perfil de usuario no registrado en el sistema local")
         except HTTPException: raise
         except Exception as db_e:
