@@ -17,7 +17,9 @@ engine = create_async_engine(
     pool_pre_ping=True,    # Auto-curación de conexiones
     pool_recycle=300,      # Rotación cada 5 min
     connect_args={
-        "statement_cache_size": 0  # <--- ESTO DESACTIVA LOS PREPARED STATEMENTS
+        "statement_cache_size": 0,  # <--- ESTO DESACTIVA LOS PREPARED STATEMENTS
+        "timeout": 30,             # General command timeout (seconds)
+        "command_timeout": 30      # Synonym used by some asyncpg versions
     }
 )
 

@@ -54,6 +54,17 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
+# --- GLOBAL EXCEPTION HANDLER (DEBUG) ---
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    error_msg = f"[FATAL ERROR] {request.method} {request.url}\n{traceback.format_exc()}"
+    print(error_msg) # Esto sale en los logs de Render
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error (See logs for traceback)"},
+    )
+
 @app.on_event("startup")
 async def on_startup():
     # Asegurar que las tablas existan en el primer arranque (Zero-Touch Prod)
