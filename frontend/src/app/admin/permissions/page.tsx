@@ -86,7 +86,7 @@ export default function PermissionsPage() {
                         ...p,
                         module: mod.toLowerCase(),
                         resource: p.resource.toLowerCase(),
-                        name: p.name || p.action.toUpperCase()
+                        name: p.name && p.name.trim() !== '' ? p.name : p.action.toUpperCase()
                     }));
                 });
             });
