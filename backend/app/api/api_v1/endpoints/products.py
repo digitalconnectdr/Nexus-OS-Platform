@@ -112,7 +112,16 @@ async def create_product(
         db_product = Product(**product_data)
         db.add(db_product)
         await db.commit()
-        await db.refresh(db_product)
+
+        
+        # Eager load campaign to avoid MissingGreenlet error in Pydantic serialization
+        stmt = (
+            select(Product)
+            .options(joinedload(Product.campaign))
+            .where(Product.id == db_product.id)
+        )
+        result = await db.execute(stmt)
+        db_product = result.scalar_one()
         
         return db_product
     except Exception as e:
