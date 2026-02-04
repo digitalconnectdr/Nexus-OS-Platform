@@ -104,7 +104,7 @@ export default function Sidebar() {
     const adminItems = useMemo(() => {
         const hasUsersAccess = can('config_users', 'users', 'read');
         const hasPermsAccess = can('policies', 'permissions', 'read');
-        const hasOrgsAccess = can('policies', 'organizations', 'read');
+        const hasOrgsAccess = can('policies', 'organizations', 'view_tab');
 
         const items = [
             {

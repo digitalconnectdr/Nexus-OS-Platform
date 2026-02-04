@@ -15,7 +15,7 @@ router = APIRouter()
 async def list_organizations(
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("organizations", "read", module="policies")),
+    _: bool = Depends(check_permission("organizations", "view_tab", module="policies")),
     trashed: bool = False
 ):
     """Listado de organizaciones vía SQL Directo"""
