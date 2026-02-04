@@ -20,9 +20,19 @@ async def bootstrap(
     """
     # 1. Fetch permissions for the user's role
     role_str = str(current_user.role.value) if hasattr(current_user.role, 'value') else str(current_user.role)
-    perm_query = select(RolePermission).where(RolePermission.role == role_str)
+    
+    # FIX: Filter by tenant_id to avoid cross-tenant pollution
+    perm_query = select(RolePermission).where(
+        RolePermission.role == role_str,
+        RolePermission.tenant_id == current_user.tenant_id
+    )
     perm_result = await db.execute(perm_query)
     perms = perm_result.scalars().all()
+    
+    # REQUESTED LOG: Audit permission count at login
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"Usuario {current_user.email} cargando {len(perms)} permisos activos para Tenant {current_user.tenant_id}")
     
     permissions_map = {}
     for p in perms:
