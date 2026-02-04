@@ -13,6 +13,7 @@ from app.schemas.core import CampaignOut, CampaignUpdate, CampaignCreate
 from uuid import UUID
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.get("/", response_model=List[CampaignOut])
 async def list_campaigns(
