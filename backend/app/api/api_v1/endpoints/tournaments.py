@@ -24,18 +24,26 @@ async def read_tournaments(
     _: bool = Depends(check_permission("tournaments", "view_module")),
     skip: int = 0,
     limit: int = 100,
+    trashed: bool = False
 ):
     """View active tournaments for the organization."""
     # check_permission implemented as dependency
     
-    stmt = select(
+    query = select(
         Tournament,
         UserProfile
     ).outerjoin(
         UserProfile, Tournament.winner_id == UserProfile.id
     ).where(
         Tournament.tenant_id == current_user.tenant_id
-    ).offset(skip).limit(limit).order_by(Tournament.is_active.desc(), Tournament.end_date.desc())
+    )
+    
+    if trashed:
+        query = query.where(Tournament.is_deleted == True)
+    else:
+        query = query.where(Tournament.is_deleted == False)
+
+    stmt = query.offset(skip).limit(limit).order_by(Tournament.is_active.desc(), Tournament.end_date.desc())
     
     result = await db.execute(stmt)
     tournaments = []

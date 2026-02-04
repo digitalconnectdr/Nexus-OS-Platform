@@ -36,6 +36,7 @@ async def read_sales(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=1, le=100),
     search: Optional[str] = Query(None),
+    trashed: bool = Query(False),
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(deps.get_db)
 ):
@@ -69,8 +70,14 @@ async def read_sales(
                 selectinload(SalesOrder.agent),
                 selectinload(SalesOrder.supervisor)
             )
-            .where(SalesOrder.is_deleted == False, SalesOrder.tenant_id == current_user.tenant_id)
         )
+        
+        stmt = stmt.where(SalesOrder.tenant_id == current_user.tenant_id)
+        
+        if trashed:
+             stmt = stmt.where(SalesOrder.is_deleted == True)
+        else:
+             stmt = stmt.where(SalesOrder.is_deleted == False)
         
         # 3. Role Scoping
         if current_user.role not in [UserRole.SUPER_ADMIN, UserRole.ADMINISTRADOR, UserRole.GERENTE, UserRole.SUPERVISOR, UserRole.SUPERVISOR_SENIOR]:
@@ -298,25 +305,32 @@ async def purge_sale(
     PURGA DE VENTA: Borrado físico irreversible.
     Requiere permiso explícito 'sales:purge'.
     """
-    result = await db.execute(
-        select(SalesOrder)
-        .where(SalesOrder.id == sale_id)
-        .where(SalesOrder.tenant_id == current_user.tenant_id)
-    )
-    sale = result.scalar_one_or_none()
-    if not sale:
-        raise HTTPException(
-            status_code=404, 
-            detail="Venta no encontrada o no tiene permisos para purgarla."
-        )
-    
-    # Optional: Should we mandate that it must be soft-deleted first? 
-    # For flexibility, we allow purging directly or from trash.
+    from sqlalchemy import delete
     
     try:
-        await db.delete(sale)
+        # Direct SQL Delete bypassing ORM filters
+        stmt = delete(SalesOrder).where(
+            SalesOrder.id == sale_id,
+            SalesOrder.tenant_id == current_user.tenant_id
+        )
+        
+        logger.info(f"PURGING SALE {sale_id} - SQL: {stmt}")
+        
+        result = await db.execute(stmt)
+        
+        # Explicit Flush
+        await db.flush()
         await db.commit()
+        
+        if result.rowcount == 0:
+             raise HTTPException(
+                status_code=404, 
+                detail="Venta no encontrada o ya eliminada físicamente (0 filas afectadas)."
+            )
+            
         return None
+    except HTTPException:
+        raise
     except Exception as e:
         await db.rollback()
         logger.error(f"PURGE ERROR: {e}", exc_info=True)

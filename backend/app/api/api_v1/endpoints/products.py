@@ -68,13 +68,19 @@ async def list_products(
     db: AsyncSession = Depends(get_db),
     params: CommonQueryParams = Depends(),
     include_inactive: bool = False,
+    trashed: bool = False,
     campaign_id: Optional[UUID] = Query(None),
     current_user: UserProfile = Depends(get_current_user),
     _: bool = Depends(check_permission("products", "read", module="config_products"))
 ):
     query = select(Product).options(joinedload(Product.campaign)).where(Product.tenant_id == current_user.tenant_id)
-    if not include_inactive:
-        query = query.where(Product.is_active == True)
+    
+    if trashed:
+        query = query.where(Product.is_deleted == True)
+    else:
+        query = query.where(Product.is_deleted == False)
+        if not include_inactive:
+            query = query.where(Product.is_active == True)
     
     if campaign_id:
         query = query.where(Product.campaign_id == campaign_id)
@@ -182,16 +188,28 @@ async def purge_product(
 ):
     """PURGA DE PRODUCTO: Borrado físico irreversible."""
     try:
-        stmt = select(Product).where(Product.id == product_id, Product.tenant_id == current_user.tenant_id)
-        result = await db.execute(stmt)
-        db_product = result.scalar_one_or_none()
+        from sqlalchemy import delete
         
-        if not db_product:
-            raise HTTPException(status_code=404, detail="Producto no encontrado")
-            
-        await db.delete(db_product)
+        stmt = delete(Product).where(
+            Product.id == product_id,
+            Product.tenant_id == current_user.tenant_id
+        )
+        
+        logger.info(f"PURGING PRODUCT {product_id} - SQL: {stmt}")
+        
+        result = await db.execute(stmt)
+        
+        # Explicit Flush
+        await db.flush()
         await db.commit()
+        
+        if result.rowcount == 0:
+            logger.error(f"PURGE FAILED: 0 rows deleted for product {product_id}")
+            raise HTTPException(status_code=404, detail="Producto no encontrado o ya eliminado (0 filas afectadas).")
+            
         return None
+    except HTTPException:
+        raise
     except Exception as e:
         await db.rollback()
         if "foreign key constraint" in str(e).lower():
