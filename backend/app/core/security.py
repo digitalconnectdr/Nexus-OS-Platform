@@ -140,7 +140,7 @@ def check_permission(resource: str, action: str, module: Optional[str] = None):
             role_str = role_str.split(".")[-1]
             
         filters = [
-            RolePermission.role == role_str,
+            func.lower(RolePermission.role) == role_str.lower(),
             func.lower(RolePermission.resource) == resource.lower(),
             func.lower(RolePermission.action) == action.lower(),
             RolePermission.tenant_id == user.tenant_id
