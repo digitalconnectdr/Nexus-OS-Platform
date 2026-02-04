@@ -70,8 +70,16 @@ async def create_campaign(
         stmt = select(Campaign).options(selectinload(Campaign.default_status)).where(Campaign.id == db_campaign.id)
         res = await db.execute(stmt)
         return res.scalar_one()
+        return res.scalar_one()
     except Exception as e:
         await db.rollback()
+        
+        # Catch Duplicates
+        err_str = str(e).lower()
+        if "unique" in err_str or "integrity" in err_str:
+             logger.warning(f"⚠️ Duplicate campaign attempt: {campaign_in.name}")
+             raise HTTPException(status_code=400, detail="Ya existe una campaña con este nombre")
+        
         logger.error(f"Error creating campaign via SQL: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 

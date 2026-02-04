@@ -240,12 +240,18 @@ export default function ConfigManager() {
             });
             loadTabData(); // Recargar datos
         } catch (err: any) {
-            toast({
-                title: "Error al guardar",
-                description: err.message,
-                variant: "destructive",
-                duration: 8000
-            });
+            // NEW: Capture duplicate error for specific display
+            const errMsg = err.message || "Error desconocido";
+            if (activeTab === 'campaigns' && errMsg.includes("Ya existe")) {
+                setError(errMsg); // Use local error for inline alert
+            } else {
+                toast({
+                    title: "Error al guardar",
+                    description: errMsg,
+                    variant: "destructive",
+                    duration: 8000
+                });
+            }
         } finally {
             setActionLoading(false);
         }
@@ -493,6 +499,22 @@ export default function ConfigManager() {
                         <div className="grid grid-cols-12 gap-5">
                             {activeTab === 'campaigns' && (
                                 <>
+                                    {error && error.includes("Ya existe") && (
+                                        <div className="col-span-12 bg-red-50 border-l-4 border-red-500 p-4 mb-2">
+                                            <div className="flex">
+                                                <div className="flex-shrink-0">
+                                                    <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                                    </svg>
+                                                </div>
+                                                <div className="ml-3">
+                                                    <p className="text-xs text-red-700 font-bold uppercase tracking-wide">
+                                                        {error}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="col-span-12 space-y-1.5">
                                         <label className="block text-[12px] font-bold text-gray-700 dark:text-slate-300 uppercase tracking-wider pl-1 font-black">Nombre de Campaña</label>
                                         <input
