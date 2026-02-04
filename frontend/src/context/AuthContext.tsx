@@ -72,6 +72,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 };
 
                 console.log('✅ [AUTH] Sincronización completa.', { email: userData.email, role: userData.role });
+
+                // --- EMERGENCY NORMALIZATION ---
+                if (userData.role) {
+                    userData.role = userData.role.toLowerCase();
+                }
+                // -------------------------------
+
                 setAuthState({
                     session: currentSession,
                     user: userData,
@@ -106,7 +113,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const hasPermission = React.useCallback((arg1: string, arg2: string, arg3?: string): boolean => {
         if (!authState.user) return false;
-        if (authState.user.role === 'Super Admin') return true;
+
+        // --- SUPER ADMIN BYPASS (Safe & Normalized) ---
+        const userRole = (authState.user.role || '').toLowerCase();
+        if (userRole === 'super admin' || userRole === 'super_admin') return true;
+        // ----------------------------------------------
 
         // Tri-factor lookup: module:resource:action
         if (arg3) {

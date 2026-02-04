@@ -19,9 +19,15 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(securit
         # En producción estricta, deberíamos verificar la firma con el JWT Secret de Supabase.
         payload = jwt.decode(token, options={"verify_signature": False})
         
-        # Verificar expiración
-        # (jwt.decode ya lanza error si expira, pero es bueno ser explícito en logs si se requiere)
-        
+        # --- EMERGENCY ROLE NORMALIZATION ---
+        if "role" in payload and payload["role"]:
+            payload["role"] = str(payload["role"]).lower()
+            
+        if "user_metadata" in payload and payload["user_metadata"]:
+            if "role" in payload["user_metadata"]:
+                 payload["user_metadata"]["role"] = str(payload["user_metadata"]["role"]).lower()
+        # ------------------------------------
+
         return payload  # Contiene 'sub' (User UUID), 'email', 'role', etc.
         
     except Exception as e:

@@ -172,7 +172,7 @@ async def create_user(
             "email_confirm": True,
             "user_metadata": {
                 "full_name": f"{user_in.first_name or ''} {user_in.last_name or ''}".strip(),
-                "role": user_in.role
+                "role": str(user_in.role).lower() if user_in.role else None # FORCE LOWERCASE
             }
         })
         
@@ -189,7 +189,7 @@ async def create_user(
             email=user_in.email,
             first_name=user_in.first_name,
             last_name=user_in.last_name,
-            role=user_in.role,
+            role=str(user_in.role).lower() if user_in.role else None, # FORCE LOWERCASE
             is_active=True
         )
         
@@ -271,7 +271,7 @@ async def update_user(
             if user_in.first_name or user_in.last_name:
                 meta["full_name"] = f"{db_user.first_name} {db_user.last_name}"
             if user_in.role:
-                meta["role"] = db_user.role
+                meta["role"] = str(db_user.role).lower() # Use normalized DB value
             try:
                 supabase_admin.auth.admin.update_user_by_id(str(user_id), {"user_metadata": meta})
             except: pass

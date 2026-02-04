@@ -45,7 +45,7 @@ async def initialize_organization_permissions(tenant_id: uuid.UUID, db: AsyncSes
             new_perm = RolePermission(
                 id=uuid.uuid4(),
                 tenant_id=tenant_id,
-                role=p.role,
+                role=str(p.role).lower(), # FORCE LOWERCASE
                 module=p.module,
                 resource=p.resource,
                 action=p.action,

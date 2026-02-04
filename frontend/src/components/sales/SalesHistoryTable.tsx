@@ -134,23 +134,29 @@ export default function SalesHistoryTable() {
 
     useEffect(() => {
         if (permsLoading) return;
-        if (!can('history', 'view')) return;
+        // CRASH PROTECTION: Safe Check
+        const hasAccess = can ? can('history', 'view') : false;
+        if (!hasAccess) return;
 
         loadData();
     }, [pageIndex, pageSize, permsLoading, can]);
 
-    if (!permsLoading && !can('history', 'view')) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-400 space-y-4">
-                <div className="p-4 bg-slate-100 rounded-full">
-                    <LockClosedIcon className="w-12 h-12 opacity-20" />
+    if (!permsLoading) {
+        // CRASH PROTECTION: Safe Check
+        const hasAccess = can ? can('history', 'view') : false;
+        if (!hasAccess) {
+            return (
+                <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-400 space-y-4">
+                    <div className="p-4 bg-slate-100 rounded-full">
+                        <LockClosedIcon className="w-12 h-12 opacity-20" />
+                    </div>
+                    <h3 className="text-sm font-black uppercase tracking-widest text-[#072D44]">Bóveda de Historial Bloqueada</h3>
+                    <p className="text-[10px] font-bold uppercase tracking-wider max-w-xs text-center line-height-relaxed opacity-60">
+                        Tu perfil actual no posee permisos para consultar el Historial Maestro. Contacta a un administrador para habilitar 'history:view'.
+                    </p>
                 </div>
-                <h3 className="text-sm font-black uppercase tracking-widest text-[#072D44]">Bóveda de Historial Bloqueada</h3>
-                <p className="text-[10px] font-bold uppercase tracking-wider max-w-xs text-center line-height-relaxed opacity-60">
-                    Tu perfil actual no posee permisos para consultar el Historial Maestro. Contacta a un administrador para habilitar 'history:view'.
-                </p>
-            </div>
-        );
+            );
+        }
     }
 
     const handleUpdate = async (id: string, field: string, value: any) => {

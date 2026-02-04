@@ -1,0 +1,2829 @@
+{
+  "Supervisor Senior": {
+    "dashboard": {
+      "sales": [
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Venta"
+        },
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Dashboard de Ventas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Nueva Venta"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Venta"
+        },
+        {
+          "action": "change_status",
+          "is_allowed": false,
+          "name": "Cambiar Estatus"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Dashboard"
+        }
+      ]
+    },
+    "tournaments": {
+      "tournaments": [
+        {
+          "action": "arbitration_panel",
+          "is_allowed": false,
+          "name": "Panel de Arbitraje"
+        },
+        {
+          "action": "view_module",
+          "is_allowed": false,
+          "name": "Entrar a Torneos"
+        },
+        {
+          "action": "create_battle",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Crear Torneo"
+        },
+        {
+          "action": "view_race_track",
+          "is_allowed": false,
+          "name": "Ver Carreras Activas"
+        },
+        {
+          "action": "edit",
+          "is_allowed": false,
+          "name": "Editar Torneo"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Borrar Torneo"
+        }
+      ]
+    },
+    "performance": {
+      "performance": [
+        {
+          "action": "efficiency",
+          "is_allowed": false,
+          "name": "Ver Eficiencia Operativa"
+        },
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Performance"
+        },
+        {
+          "action": "scorecard",
+          "is_allowed": false,
+          "name": "Ver Scorecard"
+        },
+        {
+          "action": "backoffice",
+          "is_allowed": false,
+          "name": "Ver Backoffice"
+        },
+        {
+          "action": "reports",
+          "is_allowed": false,
+          "name": "Generar Reportes Performance"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Performance"
+        }
+      ]
+    },
+    "history": {
+      "sales": [
+        {
+          "action": "read_history",
+          "is_allowed": false,
+          "name": "Ver Historial de Ventas"
+        },
+        {
+          "action": "export_history",
+          "is_allowed": false,
+          "name": "Exportar Historial"
+        }
+      ]
+    },
+    "finance": {
+      "finance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Finanzas"
+        },
+        {
+          "action": "results",
+          "is_allowed": false,
+          "name": "Ver Resultados Financieros"
+        },
+        {
+          "action": "summary",
+          "is_allowed": false,
+          "name": "Ver Resumen Financiero"
+        },
+        {
+          "action": "payroll",
+          "is_allowed": false,
+          "name": "Ver N\u00f3mina de Comisiones"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Financiera"
+        }
+      ]
+    },
+    "config_campaigns": {
+      "campaigns": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Campa\u00f1as"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Campa\u00f1as"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Campa\u00f1as"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Campa\u00f1as"
+        }
+      ]
+    },
+    "config_products": {
+      "products": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Productos"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Productos"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Productos"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Productos"
+        }
+      ]
+    },
+    "config_goals": {
+      "goals": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Metas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Metas"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Metas"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Metas"
+        }
+      ]
+    },
+    "config_statuses": {
+      "statuses": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Estados"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Estados"
+        }
+      ]
+    },
+    "config_users": {
+      "users": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Usuarios"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Usuarios"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Usuarios"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Usuarios"
+        }
+      ]
+    }
+  },
+  "Gerente": {
+    "dashboard": {
+      "sales": [
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Venta"
+        },
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Dashboard de Ventas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Nueva Venta"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Venta"
+        },
+        {
+          "action": "change_status",
+          "is_allowed": false,
+          "name": "Cambiar Estatus"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Dashboard"
+        }
+      ]
+    },
+    "performance": {
+      "performance": [
+        {
+          "action": "efficiency",
+          "is_allowed": false,
+          "name": "Ver Eficiencia Operativa"
+        },
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Performance"
+        },
+        {
+          "action": "scorecard",
+          "is_allowed": false,
+          "name": "Ver Scorecard"
+        },
+        {
+          "action": "backoffice",
+          "is_allowed": false,
+          "name": "Ver Backoffice"
+        },
+        {
+          "action": "reports",
+          "is_allowed": false,
+          "name": "Generar Reportes Performance"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Performance"
+        }
+      ]
+    },
+    "history": {
+      "sales": [
+        {
+          "action": "read_history",
+          "is_allowed": false,
+          "name": "Ver Historial de Ventas"
+        },
+        {
+          "action": "export_history",
+          "is_allowed": false,
+          "name": "Exportar Historial"
+        }
+      ]
+    },
+    "finance": {
+      "finance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Finanzas"
+        },
+        {
+          "action": "results",
+          "is_allowed": false,
+          "name": "Ver Resultados Financieros"
+        },
+        {
+          "action": "summary",
+          "is_allowed": false,
+          "name": "Ver Resumen Financiero"
+        },
+        {
+          "action": "payroll",
+          "is_allowed": false,
+          "name": "Ver N\u00f3mina de Comisiones"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Financiera"
+        }
+      ]
+    },
+    "config_campaigns": {
+      "campaigns": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Campa\u00f1as"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Campa\u00f1as"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Campa\u00f1as"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Campa\u00f1as"
+        }
+      ]
+    },
+    "config_products": {
+      "products": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Productos"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Productos"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Productos"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Productos"
+        }
+      ]
+    },
+    "config_goals": {
+      "goals": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Metas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Metas"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Metas"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Metas"
+        }
+      ]
+    },
+    "config_statuses": {
+      "statuses": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Estados"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Estados"
+        }
+      ]
+    },
+    "config_users": {
+      "users": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Usuarios"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Usuarios"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Usuarios"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Usuarios"
+        }
+      ]
+    },
+    "tournaments": {
+      "tournaments": [
+        {
+          "action": "view_module",
+          "is_allowed": false,
+          "name": "Entrar a Torneos"
+        },
+        {
+          "action": "create_battle",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Crear Torneo"
+        },
+        {
+          "action": "view_race_track",
+          "is_allowed": false,
+          "name": "Ver Carreras Activas"
+        },
+        {
+          "action": "arbitration_panel",
+          "is_allowed": false,
+          "name": "Panel de Arbitraje"
+        },
+        {
+          "action": "edit",
+          "is_allowed": false,
+          "name": "Editar Torneo"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Borrar Torneo"
+        }
+      ]
+    }
+  },
+  "Supervisor": {
+    "config_products": {
+      "products": [
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Productos"
+        },
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Productos"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Productos"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Productos"
+        }
+      ]
+    },
+    "performance": {
+      "performance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Performance"
+        },
+        {
+          "action": "efficiency",
+          "is_allowed": false,
+          "name": "Ver Eficiencia Operativa"
+        },
+        {
+          "action": "scorecard",
+          "is_allowed": false,
+          "name": "Ver Scorecard"
+        },
+        {
+          "action": "backoffice",
+          "is_allowed": false,
+          "name": "Ver Backoffice"
+        },
+        {
+          "action": "reports",
+          "is_allowed": false,
+          "name": "Generar Reportes Performance"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Performance"
+        }
+      ]
+    },
+    "dashboard": {
+      "sales": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Dashboard de Ventas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Nueva Venta"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Venta"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Venta"
+        },
+        {
+          "action": "change_status",
+          "is_allowed": false,
+          "name": "Cambiar Estatus"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Dashboard"
+        }
+      ]
+    },
+    "history": {
+      "sales": [
+        {
+          "action": "read_history",
+          "is_allowed": false,
+          "name": "Ver Historial de Ventas"
+        },
+        {
+          "action": "export_history",
+          "is_allowed": false,
+          "name": "Exportar Historial"
+        }
+      ]
+    },
+    "finance": {
+      "finance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Finanzas"
+        },
+        {
+          "action": "results",
+          "is_allowed": false,
+          "name": "Ver Resultados Financieros"
+        },
+        {
+          "action": "summary",
+          "is_allowed": false,
+          "name": "Ver Resumen Financiero"
+        },
+        {
+          "action": "payroll",
+          "is_allowed": false,
+          "name": "Ver N\u00f3mina de Comisiones"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Financiera"
+        }
+      ]
+    },
+    "config_campaigns": {
+      "campaigns": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Campa\u00f1as"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Campa\u00f1as"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Campa\u00f1as"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Campa\u00f1as"
+        }
+      ]
+    },
+    "config_goals": {
+      "goals": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Metas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Metas"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Metas"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Metas"
+        }
+      ]
+    },
+    "config_statuses": {
+      "statuses": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Estados"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Estados"
+        }
+      ]
+    },
+    "config_users": {
+      "users": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Usuarios"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Usuarios"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Usuarios"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Usuarios"
+        }
+      ]
+    },
+    "tournaments": {
+      "tournaments": [
+        {
+          "action": "view_module",
+          "is_allowed": false,
+          "name": "Entrar a Torneos"
+        },
+        {
+          "action": "create_battle",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Crear Torneo"
+        },
+        {
+          "action": "view_race_track",
+          "is_allowed": false,
+          "name": "Ver Carreras Activas"
+        },
+        {
+          "action": "arbitration_panel",
+          "is_allowed": false,
+          "name": "Panel de Arbitraje"
+        },
+        {
+          "action": "edit",
+          "is_allowed": false,
+          "name": "Editar Torneo"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Borrar Torneo"
+        }
+      ]
+    }
+  },
+  "Administrador": {
+    "dashboard": {
+      "sales": [
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Venta"
+        },
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Dashboard de Ventas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Nueva Venta"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Venta"
+        },
+        {
+          "action": "change_status",
+          "is_allowed": false,
+          "name": "Cambiar Estatus"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Dashboard"
+        }
+      ]
+    },
+    "config_statuses": {
+      "statuses": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Estados"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Estados"
+        }
+      ]
+    },
+    "history": {
+      "sales": [
+        {
+          "action": "read_history",
+          "is_allowed": false,
+          "name": "Ver Historial de Ventas"
+        },
+        {
+          "action": "export_history",
+          "is_allowed": false,
+          "name": "Exportar Historial"
+        }
+      ]
+    },
+    "performance": {
+      "performance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Performance"
+        },
+        {
+          "action": "efficiency",
+          "is_allowed": false,
+          "name": "Ver Eficiencia Operativa"
+        },
+        {
+          "action": "scorecard",
+          "is_allowed": false,
+          "name": "Ver Scorecard"
+        },
+        {
+          "action": "backoffice",
+          "is_allowed": false,
+          "name": "Ver Backoffice"
+        },
+        {
+          "action": "reports",
+          "is_allowed": false,
+          "name": "Generar Reportes Performance"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Performance"
+        }
+      ]
+    },
+    "finance": {
+      "finance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Finanzas"
+        },
+        {
+          "action": "results",
+          "is_allowed": false,
+          "name": "Ver Resultados Financieros"
+        },
+        {
+          "action": "summary",
+          "is_allowed": false,
+          "name": "Ver Resumen Financiero"
+        },
+        {
+          "action": "payroll",
+          "is_allowed": false,
+          "name": "Ver N\u00f3mina de Comisiones"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Financiera"
+        }
+      ]
+    },
+    "config_campaigns": {
+      "campaigns": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Campa\u00f1as"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Campa\u00f1as"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Campa\u00f1as"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Campa\u00f1as"
+        }
+      ]
+    },
+    "config_products": {
+      "products": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Productos"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Productos"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Productos"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Productos"
+        }
+      ]
+    },
+    "config_goals": {
+      "goals": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Metas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Metas"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Metas"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Metas"
+        }
+      ]
+    },
+    "config_users": {
+      "users": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Usuarios"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Usuarios"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Usuarios"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Usuarios"
+        }
+      ]
+    },
+    "tournaments": {
+      "tournaments": [
+        {
+          "action": "view_module",
+          "is_allowed": false,
+          "name": "Entrar a Torneos"
+        },
+        {
+          "action": "create_battle",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Crear Torneo"
+        },
+        {
+          "action": "view_race_track",
+          "is_allowed": false,
+          "name": "Ver Carreras Activas"
+        },
+        {
+          "action": "arbitration_panel",
+          "is_allowed": false,
+          "name": "Panel de Arbitraje"
+        },
+        {
+          "action": "edit",
+          "is_allowed": false,
+          "name": "Editar Torneo"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Borrar Torneo"
+        }
+      ]
+    }
+  },
+  "Representante": {
+    "dashboard": {
+      "sales": [
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Venta"
+        },
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Dashboard de Ventas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Nueva Venta"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Venta"
+        },
+        {
+          "action": "change_status",
+          "is_allowed": false,
+          "name": "Cambiar Estatus"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Dashboard"
+        }
+      ]
+    },
+    "history": {
+      "sales": [
+        {
+          "action": "read_history",
+          "is_allowed": false,
+          "name": "Ver Historial de Ventas"
+        },
+        {
+          "action": "export_history",
+          "is_allowed": false,
+          "name": "Exportar Historial"
+        }
+      ]
+    },
+    "performance": {
+      "performance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Performance"
+        },
+        {
+          "action": "efficiency",
+          "is_allowed": false,
+          "name": "Ver Eficiencia Operativa"
+        },
+        {
+          "action": "scorecard",
+          "is_allowed": false,
+          "name": "Ver Scorecard"
+        },
+        {
+          "action": "backoffice",
+          "is_allowed": false,
+          "name": "Ver Backoffice"
+        },
+        {
+          "action": "reports",
+          "is_allowed": false,
+          "name": "Generar Reportes Performance"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Performance"
+        }
+      ]
+    },
+    "finance": {
+      "finance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Finanzas"
+        },
+        {
+          "action": "results",
+          "is_allowed": false,
+          "name": "Ver Resultados Financieros"
+        },
+        {
+          "action": "summary",
+          "is_allowed": false,
+          "name": "Ver Resumen Financiero"
+        },
+        {
+          "action": "payroll",
+          "is_allowed": false,
+          "name": "Ver N\u00f3mina de Comisiones"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Financiera"
+        }
+      ]
+    },
+    "config_campaigns": {
+      "campaigns": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Campa\u00f1as"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Campa\u00f1as"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Campa\u00f1as"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Campa\u00f1as"
+        }
+      ]
+    },
+    "config_products": {
+      "products": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Productos"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Productos"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Productos"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Productos"
+        }
+      ]
+    },
+    "config_goals": {
+      "goals": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Metas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Metas"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Metas"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Metas"
+        }
+      ]
+    },
+    "config_statuses": {
+      "statuses": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Estados"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Estados"
+        }
+      ]
+    },
+    "config_users": {
+      "users": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Usuarios"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Usuarios"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Usuarios"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Usuarios"
+        }
+      ]
+    },
+    "tournaments": {
+      "tournaments": [
+        {
+          "action": "view_module",
+          "is_allowed": false,
+          "name": "Entrar a Torneos"
+        },
+        {
+          "action": "create_battle",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Crear Torneo"
+        },
+        {
+          "action": "view_race_track",
+          "is_allowed": false,
+          "name": "Ver Carreras Activas"
+        },
+        {
+          "action": "arbitration_panel",
+          "is_allowed": false,
+          "name": "Panel de Arbitraje"
+        },
+        {
+          "action": "edit",
+          "is_allowed": false,
+          "name": "Editar Torneo"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Borrar Torneo"
+        }
+      ]
+    }
+  },
+  "Super Admin": {
+    "dashboard": {
+      "sales": [
+        {
+          "action": "read",
+          "is_allowed": true,
+          "name": "Ver Dashboard de Ventas"
+        },
+        {
+          "action": "create",
+          "is_allowed": true,
+          "name": "Bot\u00f3n Nueva Venta"
+        },
+        {
+          "action": "update",
+          "is_allowed": true,
+          "name": "Editar Venta"
+        },
+        {
+          "action": "delete",
+          "is_allowed": true,
+          "name": "Eliminar Venta"
+        },
+        {
+          "action": "change_status",
+          "is_allowed": true,
+          "name": "Cambiar Estatus"
+        },
+        {
+          "action": "export",
+          "is_allowed": true,
+          "name": "Exportar Data Dashboard"
+        }
+      ]
+    },
+    "history": {
+      "sales": [
+        {
+          "action": "read_history",
+          "is_allowed": true,
+          "name": "Ver Historial de Ventas"
+        },
+        {
+          "action": "export_history",
+          "is_allowed": true,
+          "name": "Exportar Historial"
+        }
+      ]
+    },
+    "performance": {
+      "performance": [
+        {
+          "action": "read",
+          "is_allowed": true,
+          "name": "Ver Pesta\u00f1a Performance"
+        },
+        {
+          "action": "efficiency",
+          "is_allowed": true,
+          "name": "Ver Eficiencia Operativa"
+        },
+        {
+          "action": "scorecard",
+          "is_allowed": true,
+          "name": "Ver Scorecard"
+        },
+        {
+          "action": "backoffice",
+          "is_allowed": true,
+          "name": "Ver Backoffice"
+        },
+        {
+          "action": "reports",
+          "is_allowed": true,
+          "name": "Generar Reportes Performance"
+        },
+        {
+          "action": "export",
+          "is_allowed": true,
+          "name": "Exportar Data Performance"
+        }
+      ]
+    },
+    "finance": {
+      "finance": [
+        {
+          "action": "read",
+          "is_allowed": true,
+          "name": "Ver Pesta\u00f1a Finanzas"
+        },
+        {
+          "action": "results",
+          "is_allowed": true,
+          "name": "Ver Resultados Financieros"
+        },
+        {
+          "action": "summary",
+          "is_allowed": true,
+          "name": "Ver Resumen Financiero"
+        },
+        {
+          "action": "payroll",
+          "is_allowed": true,
+          "name": "Ver N\u00f3mina de Comisiones"
+        },
+        {
+          "action": "export",
+          "is_allowed": true,
+          "name": "Exportar Data Financiera"
+        }
+      ]
+    },
+    "config_campaigns": {
+      "campaigns": [
+        {
+          "action": "read",
+          "is_allowed": true,
+          "name": "Ver Campa\u00f1as"
+        },
+        {
+          "action": "create",
+          "is_allowed": true,
+          "name": "Crear Campa\u00f1as"
+        },
+        {
+          "action": "update",
+          "is_allowed": true,
+          "name": "Actualizar Campa\u00f1as"
+        },
+        {
+          "action": "delete",
+          "is_allowed": true,
+          "name": "Eliminar Campa\u00f1as"
+        }
+      ]
+    },
+    "config_products": {
+      "products": [
+        {
+          "action": "read",
+          "is_allowed": true,
+          "name": "Ver Productos"
+        },
+        {
+          "action": "create",
+          "is_allowed": true,
+          "name": "Crear Productos"
+        },
+        {
+          "action": "update",
+          "is_allowed": true,
+          "name": "Actualizar Productos"
+        },
+        {
+          "action": "delete",
+          "is_allowed": true,
+          "name": "Eliminar Productos"
+        }
+      ]
+    },
+    "config_goals": {
+      "goals": [
+        {
+          "action": "read",
+          "is_allowed": true,
+          "name": "Ver Metas"
+        },
+        {
+          "action": "create",
+          "is_allowed": true,
+          "name": "Crear Metas"
+        },
+        {
+          "action": "update",
+          "is_allowed": true,
+          "name": "Actualizar Metas"
+        },
+        {
+          "action": "delete",
+          "is_allowed": true,
+          "name": "Eliminar Metas"
+        }
+      ]
+    },
+    "config_statuses": {
+      "statuses": [
+        {
+          "action": "read",
+          "is_allowed": true,
+          "name": "Ver Estados"
+        },
+        {
+          "action": "create",
+          "is_allowed": true,
+          "name": "Crear Estados"
+        }
+      ]
+    },
+    "config_users": {
+      "users": [
+        {
+          "action": "read",
+          "is_allowed": true,
+          "name": "Ver Usuarios"
+        },
+        {
+          "action": "create",
+          "is_allowed": true,
+          "name": "Crear Usuarios"
+        },
+        {
+          "action": "update",
+          "is_allowed": true,
+          "name": "Editar Usuarios"
+        },
+        {
+          "action": "delete",
+          "is_allowed": true,
+          "name": "Eliminar Usuarios"
+        }
+      ]
+    },
+    "tournaments": {
+      "tournaments": [
+        {
+          "action": "view_module",
+          "is_allowed": true,
+          "name": "Entrar a Torneos"
+        },
+        {
+          "action": "create_battle",
+          "is_allowed": true,
+          "name": "Bot\u00f3n Crear Torneo"
+        },
+        {
+          "action": "view_race_track",
+          "is_allowed": true,
+          "name": "Ver Carreras Activas"
+        },
+        {
+          "action": "arbitration_panel",
+          "is_allowed": true,
+          "name": "Panel de Arbitraje"
+        },
+        {
+          "action": "edit",
+          "is_allowed": true,
+          "name": "Editar Torneo"
+        },
+        {
+          "action": "delete",
+          "is_allowed": true,
+          "name": "Borrar Torneo"
+        }
+      ]
+    }
+  },
+  "Cliente": {
+    "dashboard": {
+      "sales": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Dashboard de Ventas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Nueva Venta"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Venta"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Venta"
+        },
+        {
+          "action": "change_status",
+          "is_allowed": false,
+          "name": "Cambiar Estatus"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Dashboard"
+        }
+      ]
+    },
+    "history": {
+      "sales": [
+        {
+          "action": "read_history",
+          "is_allowed": false,
+          "name": "Ver Historial de Ventas"
+        },
+        {
+          "action": "export_history",
+          "is_allowed": false,
+          "name": "Exportar Historial"
+        }
+      ]
+    },
+    "performance": {
+      "performance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Performance"
+        },
+        {
+          "action": "efficiency",
+          "is_allowed": false,
+          "name": "Ver Eficiencia Operativa"
+        },
+        {
+          "action": "scorecard",
+          "is_allowed": false,
+          "name": "Ver Scorecard"
+        },
+        {
+          "action": "backoffice",
+          "is_allowed": false,
+          "name": "Ver Backoffice"
+        },
+        {
+          "action": "reports",
+          "is_allowed": false,
+          "name": "Generar Reportes Performance"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Performance"
+        }
+      ]
+    },
+    "finance": {
+      "finance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Finanzas"
+        },
+        {
+          "action": "results",
+          "is_allowed": false,
+          "name": "Ver Resultados Financieros"
+        },
+        {
+          "action": "summary",
+          "is_allowed": false,
+          "name": "Ver Resumen Financiero"
+        },
+        {
+          "action": "payroll",
+          "is_allowed": false,
+          "name": "Ver N\u00f3mina de Comisiones"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Financiera"
+        }
+      ]
+    },
+    "config_campaigns": {
+      "campaigns": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Campa\u00f1as"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Campa\u00f1as"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Campa\u00f1as"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Campa\u00f1as"
+        }
+      ]
+    },
+    "config_products": {
+      "products": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Productos"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Productos"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Productos"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Productos"
+        }
+      ]
+    },
+    "config_goals": {
+      "goals": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Metas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Metas"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Metas"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Metas"
+        }
+      ]
+    },
+    "config_statuses": {
+      "statuses": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Estados"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Estados"
+        }
+      ]
+    },
+    "config_users": {
+      "users": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Usuarios"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Usuarios"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Usuarios"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Usuarios"
+        }
+      ]
+    },
+    "tournaments": {
+      "tournaments": [
+        {
+          "action": "view_module",
+          "is_allowed": false,
+          "name": "Entrar a Torneos"
+        },
+        {
+          "action": "create_battle",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Crear Torneo"
+        },
+        {
+          "action": "view_race_track",
+          "is_allowed": false,
+          "name": "Ver Carreras Activas"
+        },
+        {
+          "action": "arbitration_panel",
+          "is_allowed": false,
+          "name": "Panel de Arbitraje"
+        },
+        {
+          "action": "edit",
+          "is_allowed": false,
+          "name": "Editar Torneo"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Borrar Torneo"
+        }
+      ]
+    }
+  },
+  "Dpto Estadistica": {
+    "dashboard": {
+      "sales": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Dashboard de Ventas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Nueva Venta"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Venta"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Venta"
+        },
+        {
+          "action": "change_status",
+          "is_allowed": false,
+          "name": "Cambiar Estatus"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Dashboard"
+        }
+      ]
+    },
+    "history": {
+      "sales": [
+        {
+          "action": "read_history",
+          "is_allowed": false,
+          "name": "Ver Historial de Ventas"
+        },
+        {
+          "action": "export_history",
+          "is_allowed": false,
+          "name": "Exportar Historial"
+        }
+      ]
+    },
+    "performance": {
+      "performance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Performance"
+        },
+        {
+          "action": "efficiency",
+          "is_allowed": false,
+          "name": "Ver Eficiencia Operativa"
+        },
+        {
+          "action": "scorecard",
+          "is_allowed": false,
+          "name": "Ver Scorecard"
+        },
+        {
+          "action": "backoffice",
+          "is_allowed": false,
+          "name": "Ver Backoffice"
+        },
+        {
+          "action": "reports",
+          "is_allowed": false,
+          "name": "Generar Reportes Performance"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Performance"
+        }
+      ]
+    },
+    "finance": {
+      "finance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Finanzas"
+        },
+        {
+          "action": "results",
+          "is_allowed": false,
+          "name": "Ver Resultados Financieros"
+        },
+        {
+          "action": "summary",
+          "is_allowed": false,
+          "name": "Ver Resumen Financiero"
+        },
+        {
+          "action": "payroll",
+          "is_allowed": false,
+          "name": "Ver N\u00f3mina de Comisiones"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Financiera"
+        }
+      ]
+    },
+    "config_campaigns": {
+      "campaigns": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Campa\u00f1as"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Campa\u00f1as"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Campa\u00f1as"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Campa\u00f1as"
+        }
+      ]
+    },
+    "config_products": {
+      "products": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Productos"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Productos"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Productos"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Productos"
+        }
+      ]
+    },
+    "config_goals": {
+      "goals": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Metas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Metas"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Metas"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Metas"
+        }
+      ]
+    },
+    "config_statuses": {
+      "statuses": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Estados"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Estados"
+        }
+      ]
+    },
+    "config_users": {
+      "users": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Usuarios"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Usuarios"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Usuarios"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Usuarios"
+        }
+      ]
+    },
+    "tournaments": {
+      "tournaments": [
+        {
+          "action": "view_module",
+          "is_allowed": false,
+          "name": "Entrar a Torneos"
+        },
+        {
+          "action": "create_battle",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Crear Torneo"
+        },
+        {
+          "action": "view_race_track",
+          "is_allowed": false,
+          "name": "Ver Carreras Activas"
+        },
+        {
+          "action": "arbitration_panel",
+          "is_allowed": false,
+          "name": "Panel de Arbitraje"
+        },
+        {
+          "action": "edit",
+          "is_allowed": false,
+          "name": "Editar Torneo"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Borrar Torneo"
+        }
+      ]
+    }
+  },
+  "Auditor Calidad": {
+    "dashboard": {
+      "sales": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Dashboard de Ventas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Nueva Venta"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Venta"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Venta"
+        },
+        {
+          "action": "change_status",
+          "is_allowed": false,
+          "name": "Cambiar Estatus"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Dashboard"
+        }
+      ]
+    },
+    "history": {
+      "sales": [
+        {
+          "action": "read_history",
+          "is_allowed": false,
+          "name": "Ver Historial de Ventas"
+        },
+        {
+          "action": "export_history",
+          "is_allowed": false,
+          "name": "Exportar Historial"
+        }
+      ]
+    },
+    "performance": {
+      "performance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Performance"
+        },
+        {
+          "action": "efficiency",
+          "is_allowed": false,
+          "name": "Ver Eficiencia Operativa"
+        },
+        {
+          "action": "scorecard",
+          "is_allowed": false,
+          "name": "Ver Scorecard"
+        },
+        {
+          "action": "backoffice",
+          "is_allowed": false,
+          "name": "Ver Backoffice"
+        },
+        {
+          "action": "reports",
+          "is_allowed": false,
+          "name": "Generar Reportes Performance"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Performance"
+        }
+      ]
+    },
+    "finance": {
+      "finance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Finanzas"
+        },
+        {
+          "action": "results",
+          "is_allowed": false,
+          "name": "Ver Resultados Financieros"
+        },
+        {
+          "action": "summary",
+          "is_allowed": false,
+          "name": "Ver Resumen Financiero"
+        },
+        {
+          "action": "payroll",
+          "is_allowed": false,
+          "name": "Ver N\u00f3mina de Comisiones"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Financiera"
+        }
+      ]
+    },
+    "config_campaigns": {
+      "campaigns": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Campa\u00f1as"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Campa\u00f1as"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Campa\u00f1as"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Campa\u00f1as"
+        }
+      ]
+    },
+    "config_products": {
+      "products": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Productos"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Productos"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Productos"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Productos"
+        }
+      ]
+    },
+    "config_goals": {
+      "goals": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Metas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Metas"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Metas"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Metas"
+        }
+      ]
+    },
+    "config_statuses": {
+      "statuses": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Estados"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Estados"
+        }
+      ]
+    },
+    "config_users": {
+      "users": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Usuarios"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Usuarios"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Usuarios"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Usuarios"
+        }
+      ]
+    },
+    "tournaments": {
+      "tournaments": [
+        {
+          "action": "view_module",
+          "is_allowed": false,
+          "name": "Entrar a Torneos"
+        },
+        {
+          "action": "create_battle",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Crear Torneo"
+        },
+        {
+          "action": "view_race_track",
+          "is_allowed": false,
+          "name": "Ver Carreras Activas"
+        },
+        {
+          "action": "arbitration_panel",
+          "is_allowed": false,
+          "name": "Panel de Arbitraje"
+        },
+        {
+          "action": "edit",
+          "is_allowed": false,
+          "name": "Editar Torneo"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Borrar Torneo"
+        }
+      ]
+    }
+  },
+  "Seguimiento": {
+    "dashboard": {
+      "sales": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Dashboard de Ventas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Nueva Venta"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Venta"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Venta"
+        },
+        {
+          "action": "change_status",
+          "is_allowed": false,
+          "name": "Cambiar Estatus"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Dashboard"
+        }
+      ]
+    },
+    "history": {
+      "sales": [
+        {
+          "action": "read_history",
+          "is_allowed": false,
+          "name": "Ver Historial de Ventas"
+        },
+        {
+          "action": "export_history",
+          "is_allowed": false,
+          "name": "Exportar Historial"
+        }
+      ]
+    },
+    "performance": {
+      "performance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Performance"
+        },
+        {
+          "action": "efficiency",
+          "is_allowed": false,
+          "name": "Ver Eficiencia Operativa"
+        },
+        {
+          "action": "scorecard",
+          "is_allowed": false,
+          "name": "Ver Scorecard"
+        },
+        {
+          "action": "backoffice",
+          "is_allowed": false,
+          "name": "Ver Backoffice"
+        },
+        {
+          "action": "reports",
+          "is_allowed": false,
+          "name": "Generar Reportes Performance"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Performance"
+        }
+      ]
+    },
+    "finance": {
+      "finance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Finanzas"
+        },
+        {
+          "action": "results",
+          "is_allowed": false,
+          "name": "Ver Resultados Financieros"
+        },
+        {
+          "action": "summary",
+          "is_allowed": false,
+          "name": "Ver Resumen Financiero"
+        },
+        {
+          "action": "payroll",
+          "is_allowed": false,
+          "name": "Ver N\u00f3mina de Comisiones"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Financiera"
+        }
+      ]
+    },
+    "config_campaigns": {
+      "campaigns": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Campa\u00f1as"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Campa\u00f1as"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Campa\u00f1as"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Campa\u00f1as"
+        }
+      ]
+    },
+    "config_products": {
+      "products": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Productos"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Productos"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Productos"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Productos"
+        }
+      ]
+    },
+    "config_goals": {
+      "goals": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Metas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Metas"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Metas"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Metas"
+        }
+      ]
+    },
+    "config_statuses": {
+      "statuses": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Estados"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Estados"
+        }
+      ]
+    },
+    "config_users": {
+      "users": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Usuarios"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Usuarios"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Usuarios"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Usuarios"
+        }
+      ]
+    },
+    "tournaments": {
+      "tournaments": [
+        {
+          "action": "view_module",
+          "is_allowed": false,
+          "name": "Entrar a Torneos"
+        },
+        {
+          "action": "create_battle",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Crear Torneo"
+        },
+        {
+          "action": "view_race_track",
+          "is_allowed": false,
+          "name": "Ver Carreras Activas"
+        },
+        {
+          "action": "arbitration_panel",
+          "is_allowed": false,
+          "name": "Panel de Arbitraje"
+        },
+        {
+          "action": "edit",
+          "is_allowed": false,
+          "name": "Editar Torneo"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Borrar Torneo"
+        }
+      ]
+    }
+  },
+  "Digitaci\u00f3n": {
+    "dashboard": {
+      "sales": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Dashboard de Ventas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Nueva Venta"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Venta"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Venta"
+        },
+        {
+          "action": "change_status",
+          "is_allowed": false,
+          "name": "Cambiar Estatus"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Dashboard"
+        }
+      ]
+    },
+    "history": {
+      "sales": [
+        {
+          "action": "read_history",
+          "is_allowed": false,
+          "name": "Ver Historial de Ventas"
+        },
+        {
+          "action": "export_history",
+          "is_allowed": false,
+          "name": "Exportar Historial"
+        }
+      ]
+    },
+    "performance": {
+      "performance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Performance"
+        },
+        {
+          "action": "efficiency",
+          "is_allowed": false,
+          "name": "Ver Eficiencia Operativa"
+        },
+        {
+          "action": "scorecard",
+          "is_allowed": false,
+          "name": "Ver Scorecard"
+        },
+        {
+          "action": "backoffice",
+          "is_allowed": false,
+          "name": "Ver Backoffice"
+        },
+        {
+          "action": "reports",
+          "is_allowed": false,
+          "name": "Generar Reportes Performance"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Performance"
+        }
+      ]
+    },
+    "finance": {
+      "finance": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Pesta\u00f1a Finanzas"
+        },
+        {
+          "action": "results",
+          "is_allowed": false,
+          "name": "Ver Resultados Financieros"
+        },
+        {
+          "action": "summary",
+          "is_allowed": false,
+          "name": "Ver Resumen Financiero"
+        },
+        {
+          "action": "payroll",
+          "is_allowed": false,
+          "name": "Ver N\u00f3mina de Comisiones"
+        },
+        {
+          "action": "export",
+          "is_allowed": false,
+          "name": "Exportar Data Financiera"
+        }
+      ]
+    },
+    "config_campaigns": {
+      "campaigns": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Campa\u00f1as"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Campa\u00f1as"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Campa\u00f1as"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Campa\u00f1as"
+        }
+      ]
+    },
+    "config_products": {
+      "products": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Productos"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Productos"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Productos"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Productos"
+        }
+      ]
+    },
+    "config_goals": {
+      "goals": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Metas"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Metas"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Actualizar Metas"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Metas"
+        }
+      ]
+    },
+    "config_statuses": {
+      "statuses": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Estados"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Estados"
+        }
+      ]
+    },
+    "config_users": {
+      "users": [
+        {
+          "action": "read",
+          "is_allowed": false,
+          "name": "Ver Usuarios"
+        },
+        {
+          "action": "create",
+          "is_allowed": false,
+          "name": "Crear Usuarios"
+        },
+        {
+          "action": "update",
+          "is_allowed": false,
+          "name": "Editar Usuarios"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Eliminar Usuarios"
+        }
+      ]
+    },
+    "tournaments": {
+      "tournaments": [
+        {
+          "action": "view_module",
+          "is_allowed": false,
+          "name": "Entrar a Torneos"
+        },
+        {
+          "action": "create_battle",
+          "is_allowed": false,
+          "name": "Bot\u00f3n Crear Torneo"
+        },
+        {
+          "action": "view_race_track",
+          "is_allowed": false,
+          "name": "Ver Carreras Activas"
+        },
+        {
+          "action": "arbitration_panel",
+          "is_allowed": false,
+          "name": "Panel de Arbitraje"
+        },
+        {
+          "action": "edit",
+          "is_allowed": false,
+          "name": "Editar Torneo"
+        },
+        {
+          "action": "delete",
+          "is_allowed": false,
+          "name": "Borrar Torneo"
+        }
+      ]
+    }
+  }
+}
