@@ -43,14 +43,28 @@ async def create_organization(
         slug=org_in.slug
     )
     
+    # 1. ADD ORGANIZATION (Pending Commit)
+    db.add(db_org)
+    # FLUSH: Ensure the ID is registered in the session transaction context 
+    # so that FK relationships in the subsequent seed are valid internal to the transaction.
+    await db.flush()
+    
+    # 2. SEED PERMISSIONS (SQLAlchemy - Same Transaction)
     try:
-        db.add(db_org)
+        from app.core.permissions_seed import initialize_organization_permissions
+        # Pass DB session. Seed will INSERT permissions via ORM.
+        await initialize_organization_permissions(db_org.id, db)
+        
+        # 3. COMMIT EVERYTHING (Org + Perms)
         await db.commit()
-        await db.refresh(db_org)
-        return db_org
+        await db.refresh(db_org) 
+        
     except Exception as e:
+        # Rollback everything (Org + Partial Permissions if any)
         await db.rollback()
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to create organization. Transaction rolled back. Error: {str(e)}")
+
+    return db_org
 
 @router.get("/me", response_model=OrganizationOut)
 async def get_my_organization(
