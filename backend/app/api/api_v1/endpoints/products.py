@@ -123,10 +123,16 @@ async def create_product(
         result = await db.execute(stmt)
         db_product = result.scalar_one()
         
-        return db_product
+        # Force validation/serialization INSIDE the try/catch
+        return ProductOut.model_validate(db_product)
     except Exception as e:
-        await db.rollback()
+        # If we already committed but failed to return, the product exists. 
+        # We should log this carefully.
         logger.error(f"Error creating product via SQL: {e}", exc_info=True)
+        # If possible rollback, but if committed, it's too late for DB, but we can tell client.
+        # But here we are in the catch block. Check if committed?
+        # Actually session rollback is safe even if committed (it just clears session).
+        await db.rollback() 
         raise HTTPException(status_code=500, detail=f"Error interno al crear el producto: {str(e)}")
 
 @router.put("/{product_id}", response_model=ProductOut)
