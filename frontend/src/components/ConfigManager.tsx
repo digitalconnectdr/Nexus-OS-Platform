@@ -57,6 +57,7 @@ export default function ConfigManager() {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
     const [total, setTotal] = useState(0);
+    const [isTrashView, setIsTrashView] = useState(false);
 
     // Datos Auxiliares
     const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -94,6 +95,7 @@ export default function ConfigManager() {
                     size: pageSize.toString()
                 });
                 if (searchQuery) params.append('search', searchQuery);
+                if (isTrashView) params.append('trashed', 'true');
 
                 // Si falla el endpoint principal (ej: 500 en goals), no rompemos todo
                 mainResp = await fetchFromAPI(`/api/v1/${endpoint}?${params.toString()}`);
@@ -148,7 +150,7 @@ export default function ConfigManager() {
             // Interface unlocked
             setLoading(false);
         }
-    }, [activeTab, page, pageSize, searchQuery]);
+    }, [activeTab, page, pageSize, searchQuery, isTrashView]);
 
     useEffect(() => {
         // Synchronous cleanup to avoid state bleed
@@ -158,9 +160,9 @@ export default function ConfigManager() {
     }, [activeTab, searchQuery]);
 
     useEffect(() => {
-        // Reset page on tab or search change
+        // Reset page on tab or search change or trash view
         setPage(1);
-    }, [activeTab, searchQuery]);
+    }, [activeTab, searchQuery, isTrashView]);
 
     useEffect(() => {
         loadTabData();
@@ -278,6 +280,41 @@ export default function ConfigManager() {
         });
     };
 
+    const handlePurgeUnified = (id: string) => {
+        toast({
+            title: "☠️ ¿PURGAR REGISTRO?",
+            description: `Esta acción ELIMINARÁ DEFINITIVAMENTE el registro de ${activeTab}. NO HAY VUELTA ATRÁS.`,
+            variant: "destructive",
+            duration: Infinity,
+            action: (
+                <ToastAction
+                    altText="PURGAR"
+                    onClick={async () => {
+                        // Optimistic update
+                        const prevData = [...data];
+                        setData(prev => prev.filter(item => item.id !== id));
+
+                        try {
+                            // Usar ?force=true para purgar
+                            await fetchFromAPI(`/api/v1/${activeTab}/${id}?force=true`, { method: 'DELETE' });
+                            toast({ title: "Registro Purgado", description: "Eliminación definitiva completada." });
+
+                            // FORCE REFRESH TO SYNC FRONTEND
+                            loadTabData();
+
+                        } catch (err: any) {
+                            toast({ title: "Error", description: err.message, variant: "destructive" });
+                            setData(prevData); // Rollback
+                        }
+                    }}
+                    className="bg-black text-white hover:bg-gray-900 border-none"
+                >
+                    DESTRUIR
+                </ToastAction>
+            )
+        });
+    };
+
     // --- RENDERIZADO ---
     return (
         <div className="space-y-4 font-sans max-w-[1600px] mx-auto">
@@ -293,10 +330,28 @@ export default function ConfigManager() {
                 </div>
 
                 <div className="flex items-center gap-4">
+                    {/* Trash View Toggle */}
+                    {(activeTab === 'campaigns' || activeTab === 'goals' || activeTab === 'users' || activeTab === 'products') && (
+                        <button
+                            onClick={() => setIsTrashView(!isTrashView)}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg font-bold text-xs uppercase tracking-widest transition-all ${isTrashView
+                                ? 'bg-red-100 text-red-700 border border-red-200 shadow-inner'
+                                : 'bg-white text-gray-500 hover:bg-gray-50 border border-gray-200'
+                                }`}
+                        >
+                            <Cog6ToothIcon className={`w-4 h-4 ${isTrashView ? 'text-red-500' : 'text-gray-400'}`} />
+                            {isTrashView ? 'Viendo Papelera' : 'Papelera'}
+                        </button>
+                    )}
+
                     {activeTab !== 'users' && activeTab !== 'policies' && (
                         <button
                             onClick={handleOpenModal}
-                            className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-200 transition-all uppercase tracking-tighter"
+                            disabled={isTrashView} // Disable creation in trash view
+                            className={`px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg transition-all uppercase tracking-tighter ${isTrashView
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+                                : 'bg-blue-700 hover:bg-blue-800 text-white shadow-blue-200'
+                                }`}
                         >
                             <PlusIcon className="w-5 h-5" />
                             {activeTab === 'campaigns' ? 'Nueva Campaña' :
@@ -373,6 +428,8 @@ export default function ConfigManager() {
                                     data={data.filter(i => (i.name || '').toUpperCase().includes(searchQuery.toUpperCase()) || (i.campaign_code || '').toUpperCase().includes(searchQuery.toUpperCase()))}
                                     onEdit={handleEdit}
                                     onDelete={handleDeleteUnified}
+                                    isTrashView={isTrashView}
+                                    onPurge={handlePurgeUnified}
                                 />
                             )}
                             {activeTab === 'goals' && (
@@ -381,6 +438,8 @@ export default function ConfigManager() {
                                     allAgents={allAgents}
                                     supervisors={supervisors}
                                     onRefresh={loadTabData}
+                                    isTrashView={isTrashView}
+                                    onPurge={handlePurgeUnified}
                                 />
                             )}
                             {activeTab === 'users' && (

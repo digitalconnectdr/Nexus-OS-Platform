@@ -39,6 +39,7 @@ export default function AdminUsersTable() {
     const [editingUser, setEditingUser] = useState<any>(null);
     const [actionLoading, setActionLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [emailError, setEmailError] = useState<string | null>(null); // New state for email specific error
     const [tenantId, setTenantId] = useState<string | null>(null);
     const canChangeRole = can('config_users', 'users', 'update') || can('policies', 'policies', 'update');
     const [allProducts, setAllProducts] = useState<any[]>([]);
@@ -152,6 +153,7 @@ export default function AdminUsersTable() {
         e.preventDefault();
         setActionLoading(true);
         setError(null);
+        setEmailError(null);
         const formData = new FormData(e.currentTarget);
 
         const payload: any = {
@@ -191,8 +193,30 @@ export default function AdminUsersTable() {
         } catch (err: any) {
             console.error("Error en la operación:", err);
             // fetchFromAPI ya extrae el .detail en el .message
-            const errorMessage = err.message || 'Error al guardar usuario';
-            setError(errorMessage);
+            let errorMessage = err.message || 'Error al guardar usuario';
+
+            // Si el mensaje es un objeto stringificado o un objeto real, intentar parsearlo
+            if (typeof errorMessage === 'object') {
+                errorMessage = JSON.stringify(errorMessage);
+            }
+            if (errorMessage === '[object Object]') {
+                errorMessage = "Error desconocido del servidor (422/500). Ver Consola.";
+                if (err.detail) errorMessage = Array.isArray(err.detail) ? err.detail.map((e: any) => e.msg).join(', ') : JSON.stringify(err.detail);
+            }
+
+            if (errorMessage.includes('El correo electrónico ya está registrado') || errorMessage.includes('Email already registered')) {
+                setEmailError(errorMessage);
+                // Don't set global error to avoid double alerting, or set it if you want both. 
+                // User requested "cuadro de alerta rojo o debajo del campo del email".
+                // Let's clear global error to focus on the specific field.
+            } else {
+                setError(errorMessage);
+                toast({
+                    title: "Error de Validación",
+                    description: errorMessage,
+                    variant: "destructive"
+                });
+            }
         } finally {
             setActionLoading(false);
         }
@@ -206,6 +230,7 @@ export default function AdminUsersTable() {
     const handleOpenCreateModal = () => {
         setEditingUser(null);
         setError(null);
+        setEmailError(null);
         setIsModalOpen(true);
     };
 
@@ -832,7 +857,24 @@ export default function AdminUsersTable() {
                                 </div>
                                 <div className="col-span-12 md:col-span-8 space-y-1">
                                     <label className="text-[12px] font-bold text-gray-500 uppercase tracking-wider pl-1">Correo Electrónico (Login Institucional)</label>
-                                    <input required disabled={!!editingUser} type="email" name="email" defaultValue={editingUser?.email || ''} className={`w-full border border-gray-300 rounded-md px-3 h-9 text-xs font-bold focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all ${editingUser ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : 'text-gray-900 bg-white font-mono'}`} placeholder="usuario@nexus.com" />
+                                    <input
+                                        required
+                                        disabled={!!editingUser}
+                                        type="email"
+                                        name="email"
+                                        onChange={() => setEmailError(null)} // Clear error on typing
+                                        defaultValue={editingUser?.email || ''}
+                                        className={`w-full border ${emailError ? 'border-red-500 ring-2 ring-red-100' : 'border-gray-300'} rounded-md px-3 h-9 text-xs font-bold focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all ${editingUser ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : 'text-gray-900 bg-white font-mono'}`}
+                                        placeholder="usuario@nexus.com"
+                                    />
+                                    {emailError && (
+                                        <div className="mt-1 bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-md text-[11px] font-bold flex items-center gap-2 animate-pulse">
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                            </svg>
+                                            {emailError}
+                                        </div>
+                                    )}
                                 </div>
                                 {!editingUser && (
                                     <div className="col-span-12 md:col-span-4 space-y-1">

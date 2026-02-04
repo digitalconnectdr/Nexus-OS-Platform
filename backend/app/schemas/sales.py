@@ -49,7 +49,9 @@ class SalesOrderOut(BaseModel):
     inst_num: Optional[str] = None
     last_updated_by: Optional[str] = None
     modified_fields: Optional[list] = []
+    modified_fields: Optional[list] = []
     last_status_change: Optional[dict] = None
+    is_deleted: bool = False
     
     # Relationships (Optional objects for the table)
     agent: Optional[AgentLite] = None

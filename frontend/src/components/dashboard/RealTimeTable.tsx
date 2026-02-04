@@ -292,13 +292,17 @@ export default function RealTimeTable({
     statuses,
     campaigns,
     onUpdate,
-    onDelete
+    onDelete,
+    isTrashView = false,
+    onPurge
 }: {
     data: Sale[],
     statuses: StatusOption[],
     campaigns: CampaignOption[],
     onUpdate: (id: string, field: string, value: any) => void,
-    onDelete: (id: string) => void
+    onDelete: (id: string) => void,
+    isTrashView?: boolean,
+    onPurge?: (id: string) => void
 }) {
     const { can } = usePermission();
     const canUpdate = can('sales', 'update');
@@ -453,24 +457,38 @@ export default function RealTimeTable({
             id: "actions",
             header: "ACCIONES",
             cell: ({ row }) => {
-                if (!canUpdate && !canDelete) {
+                if (!canUpdate && !canDelete && !isTrashView) {
                     return <div className="text-center text-gray-300 font-bold">—</div>;
                 }
                 return (
                     <div className="flex justify-end items-center gap-1">
-                        {canUpdate && (
-                            <button title="Editar Registro" className="p-1 px-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-all duration-150 hover:scale-110 hover:shadow-md active:scale-95">
-                                <PencilIcon className="w-3.5 h-3.5" />
-                            </button>
-                        )}
-                        {canDelete && (
-                            <button
-                                title="Eliminar Registro"
-                                onClick={() => onDelete(row.original.id)}
-                                className="p-1 px-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-all duration-150 hover:scale-110 hover:shadow-md active:scale-95"
-                            >
-                                <TrashIcon className="w-3.5 h-3.5" />
-                            </button>
+                        {isTrashView ? (
+                            canDelete && ( // Assuming delete permission implies purge permission or separate permission
+                                <button
+                                    title="Purgar Definitivamente"
+                                    onClick={() => onPurge && onPurge(row.original.id)}
+                                    className="p-1 px-1.5 text-red-400 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-all duration-150 hover:scale-110 hover:shadow-md active:scale-95"
+                                >
+                                    <TrashIcon className="w-3.5 h-3.5" />
+                                </button>
+                            )
+                        ) : (
+                            <>
+                                {canUpdate && (
+                                    <button title="Editar Registro" className="p-1 px-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-all duration-150 hover:scale-110 hover:shadow-md active:scale-95">
+                                        <PencilIcon className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
+                                {canDelete && (
+                                    <button
+                                        title="Eliminar Registro"
+                                        onClick={() => onDelete(row.original.id)}
+                                        className="p-1 px-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-all duration-150 hover:scale-110 hover:shadow-md active:scale-95"
+                                    >
+                                        <TrashIcon className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
+                            </>
                         )}
                     </div>
                 );

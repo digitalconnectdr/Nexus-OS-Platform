@@ -59,6 +59,7 @@ class SalesGoalResponse(SalesGoalBase):
     # SOLUCIÓN DEFINITIVA: Usamos ProductResponse en lugar de Dict.
     # Pydantic 2 con from_attributes=True manejará la conversión del modelo SQLAlchemy.
     product: Optional[ProductResponse] = None 
+    is_deleted: bool = False
 
     class Config:
         from_attributes = True

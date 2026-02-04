@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Modal from '@/components/Modal';
 import { fetchFromAPI } from '@/lib/api';
 import { supabase } from '@/lib/supabase';
-import { PencilIcon, TrashIcon, CubeIcon, TagIcon, CurrencyDollarIcon, PresentationChartLineIcon, ArrowDownTrayIcon, CloudArrowUpIcon, ExclamationTriangleIcon, CheckCircleIcon, ArrowPathIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline';
+import { PencilIcon, TrashIcon, CubeIcon, TagIcon, CurrencyDollarIcon, PresentationChartLineIcon, ArrowDownTrayIcon, CloudArrowUpIcon, ExclamationTriangleIcon, CheckCircleIcon, ArrowPathIcon, ArrowUpTrayIcon, ArchiveBoxXMarkIcon } from '@heroicons/react/24/outline';
 import ProductsTable from './ProductsTable';
 import Pagination from '@/components/ui/Pagination';
 import LoadingState from '@/components/ui/LoadingState';
@@ -31,6 +31,7 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState(20);
     const [total, setTotal] = useState(0);
+    const [isTrashView, setIsTrashView] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -52,6 +53,12 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
         return () => clearTimeout(timer);
     }, [localSearch]);
 
+    // Reload when changing view mode (active vs trash)
+    useEffect(() => {
+        setPage(1);
+        loadData();
+    }, [isTrashView]);
+
     useEffect(() => {
         loadData();
     }, [page, pageSize]);
@@ -67,6 +74,7 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
                 sort_by: 'name'
             });
             if (queryParam) params.append('search', queryParam);
+            if (isTrashView) params.append('trashed', 'true');
 
             const productUrl = `/api/v1/products/?${params.toString()}`;
 
@@ -255,6 +263,34 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
         });
     };
 
+    const handlePurge = (id: string) => {
+        // En la vista de papelera, eliminar significa purgar (force delete)
+        // El backend debe manejar la eliminación física si ya está "deleted" o si se recibe un flag.
+        // Asumiendo que el endpoint DELETE estándar elimina físicamente si ya está borrado (soft-delete state)
+        // O si necesitamos un endpoint específico de purga.
+        // Por ahora usaré el mismo DELETE, suponiendo que el backend maneja doble-eliminación o parámetro force.
+        // Revisando tarea: "Backend: Schemas & Endpoints to support trashed filter".
+        // Si no hay endpoint específico de purga, DELETE normal debería funcionar si el backend lo permite.
+
+        // Mejor opción para estar seguro: enviar ?force=true si es trash view, aunque el backend podría deducirlo.
+
+        const doPurge = async () => {
+            const previousProducts = [...products];
+            setProducts(prev => prev.filter(p => p.id !== id));
+            try {
+                // Try adding force param just in case backend supports it
+                await fetchFromAPI(`/api/v1/products/${id}?force=true`, { method: 'DELETE' });
+                toast({ title: "Producto Purgado", description: "Registro eliminado definitivamente." });
+                // FORCE REFRESH
+                loadData();
+            } catch (err: any) {
+                toast({ title: "Error al purgar", description: err.message, variant: "destructive" });
+                setProducts(previousProducts);
+            }
+        };
+        doPurge();
+    };
+
     const listProductTemplate = async () => {
         try {
             const { data: { session } } = await supabase.auth.getSession();
@@ -338,6 +374,27 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                     </div>
+
+                    <button
+                        onClick={() => setIsTrashView(!isTrashView)}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wider transition-all ${isTrashView
+                            ? 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800 ring-2 ring-red-100 dark:ring-red-900/40'
+                            : 'bg-gray-50 dark:bg-slate-800 text-gray-500 dark:text-slate-400 border border-transparent hover:bg-gray-100 dark:hover:bg-slate-700'
+                            }`}
+                        title={isTrashView ? "Salir de Papelera" : "Ver Papelera de Reciclaje"}
+                    >
+                        {isTrashView ? (
+                            <>
+                                <ArrowPathIcon className="w-3.5 h-3.5" />
+                                <span>Volver a Activos</span>
+                            </>
+                        ) : (
+                            <>
+                                <ArchiveBoxXMarkIcon className="w-3.5 h-3.5" />
+                                <span>Papelera</span>
+                            </>
+                        )}
+                    </button>
                 </div>
                 <div className="flex items-center gap-3">
                     {can('config_products', 'products', 'export') && (
@@ -432,6 +489,8 @@ export default function ProductManager({ searchTerm = '' }: { searchTerm?: strin
                         onEdit={(item) => { setEditingProduct(item); setIsModalOpen(true); }}
                         onDelete={handleDelete}
                         onToggleStatus={toggleStatus}
+                        isTrashView={isTrashView}
+                        onPurge={handlePurge}
                     />
                 )}
             </div>

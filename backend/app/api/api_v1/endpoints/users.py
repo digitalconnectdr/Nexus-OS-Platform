@@ -204,10 +204,11 @@ async def create_user(
         await db.rollback()
         
         # Manejo amigable de errores de Supabase
-        if "already been registered" in error_str:
+        # "A user with this email address has already been registered" (Gotrue/Supabase error)
+        if "already been registered" in error_str or "already registered" in error_str:
             raise HTTPException(
                 status_code=400,
-                detail="Este correo electrónico ya está registrado en el sistema. Si el usuario fue eliminado, puede reactivarlo desde la Gestión de Usuarios."
+                detail="El correo electrónico ya está registrado en el sistema"
             )
             
         raise HTTPException(
@@ -387,6 +388,7 @@ async def delete_user(
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al eliminar usuario: {str(e)}")
 
+
 @router.delete("/{user_id}/purge", status_code=status.HTTP_204_NO_CONTENT)
 async def purge_user(
     user_id: UUID,
@@ -398,6 +400,9 @@ async def purge_user(
     PURGA DE USUARIO (Borrado Físico Irreversible).
     Requiere permiso explícito 'purge' en la matriz.
     """
+    # 0. LOGGING DE ENTRADA (VALIDACIÓN UUID)
+    logger.warning(f"🚨 INITIATING PURGE FOR UUID: {user_id} (Type: {type(user_id)})")
+
     # 1. Localizar usuario
     stmt = select(UserProfile).where(UserProfile.id == user_id)
     if current_user.role != UserRole.SUPER_ADMIN:
@@ -407,9 +412,10 @@ async def purge_user(
     db_user = res.scalar_one_or_none()
     
     if not db_user:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
+        logger.error(f"❌ User {user_id} NOT FOUND in database before purge.")
+        raise HTTPException(status_code=404, detail=f"Usuario {user_id} no encontrado en la base de datos.")
 
-    # 2. Validación de Jerarquía (Incluso para purga)
+    # 2. Validación de Jerarquía
     creator_level = get_role_level(current_user.role)
     target_user_level = get_role_level(db_user.role)
 
@@ -417,17 +423,59 @@ async def purge_user(
         if target_user_level >= creator_level:
              raise HTTPException(status_code=403, detail="Jerarquía insuficiente para purgar este usuario.")
 
-    # 3. Borrado Físico DB Local
+    # 3. VERIFICACIÓN DE INTEGRIDAD REFERENCIAL (CRITICAL)
+    from app.models.core import SalesOrder
+    from app.models.sales_goal import SalesGoal
+    
+    sales_check = await db.execute(select(SalesOrder.id).where(SalesOrder.agent_id == user_id).limit(1))
+    if sales_check.scalar():
+        raise HTTPException(status_code=409, detail="No se puede purgar el usuario: Tiene VENTAS asociadas en el historial. Purgue primero sus ventas o reasígnelas.")
+        
+    goals_check = await db.execute(select(SalesGoal.id).where(SalesGoal.user_id == user_id).limit(1))
+    if goals_check.scalar():
+        raise HTTPException(status_code=409, detail="No se puede purgar el usuario: Tiene METAS asociadas. Elimine sus metas mensuales primero.")
+
+    # 4. Borrado Físico DB Local
     try:
         # Primero intentamos borrar de Auth (Supabase)
+        logger.info(f"Attempting Supabase Auth DELETE for {user_id}")
         try:
-             supabase_admin.auth.admin.delete_user(str(user_id))
+             sb_res = supabase_admin.auth.admin.delete_user(str(user_id))
+             logger.info(f"Supabase Auth Delete Response: {sb_res}")
         except Exception as e:
-             logger.error(f"Error deleting user from Supabase Auth: {e}")
-             
-        await db.delete(db_user)
+             logger.error(f"Error deleting user from Supabase Auth: {e}", exc_info=True)
+             # Continuamos para asegurar limpieza local
+
+        from sqlalchemy import delete
+        
+        # DELETE TOTAL BY ID - BYPASSING ALL OTHER FILTERS
+        delete_stmt = delete(UserProfile).where(UserProfile.id == user_id)
+        
+        # LOGGING EXACT SQL QUERY
+        compiled_query = delete_stmt.compile(compile_kwargs={"literal_binds": True})
+        logger.warning(f"💀 EXEC SQL PURGE: {compiled_query}")
+        
+        del_res = await db.execute(delete_stmt)
+        
+        # Explicit Flush to force DB synchronization before Commit
+        await db.flush()
         await db.commit()
+        
+        affected_rows = del_res.rowcount
+        logger.warning(f"✅ PURGE RESULT: Affected Rows = {affected_rows}")
+
+        if affected_rows == 0:
+             # ERROR CRÍTICO SI LA BASE DE DATOS NO OBEDECE
+             logger.error(f"⛔ DATABASE FAILED TO DELETE ROW: Rowcount is 0 for ID {user_id}")
+             raise HTTPException(status_code=500, detail="CRITICAL: La base de datos reportó 0 filas eliminadas. El registro podría estar bloqueado o no existir.")
+             
         return None
+    except HTTPException:
+        raise
     except Exception as e:
         await db.rollback()
+        # Captura específica de error de FK si se nos pasó algo
+        if "foreign key constraint" in str(e).lower():
+            raise HTTPException(status_code=409, detail="Conflicto de integridad: El usuario tiene registros relacionados (ej. logs, ventas, metas) que impiden su eliminación.")
+            
         raise HTTPException(status_code=500, detail=f"Error crítico al purgar usuario: {str(e)}")

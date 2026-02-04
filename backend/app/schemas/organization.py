@@ -13,6 +13,7 @@ class OrganizationCreate(OrganizationBase):
 class OrganizationUpdate(OrganizationBase):
     name: Optional[str] = None
     slug: Optional[str] = None
+    is_deleted: Optional[bool] = None
 
 class OrganizationOut(OrganizationBase):
     id: UUID

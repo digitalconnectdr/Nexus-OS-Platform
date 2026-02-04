@@ -9,11 +9,31 @@ interface CampaignsTableProps {
     data: any[];
     onEdit: (item: any) => void;
     onDelete: (id: string) => void;
+    isTrashView?: boolean;
+    onPurge?: (id: string) => void;
 }
 
-export default function CampaignsTable({ data, onEdit, onDelete }: CampaignsTableProps) {
+export default function CampaignsTable({ data, onEdit, onDelete, isTrashView = false, onPurge }: CampaignsTableProps) {
     const { can } = usePermission();
     const { toast } = useToast();
+
+    const handlePurge = (id: string) => {
+        toast({
+            title: "☠️ ¿Purgar Definitivamente?",
+            description: "Esta acción ELIMINARÁ FÍSICAMENTE el registro. No se puede deshacer.",
+            variant: "destructive",
+            duration: Infinity,
+            action: (
+                <ToastAction
+                    altText="PURGAR"
+                    onClick={() => onPurge && onPurge(id)}
+                    className="bg-red-900 text-white hover:bg-black border-none px-4 font-black"
+                >
+                    DESTRUIR
+                </ToastAction>
+            ),
+        });
+    };
 
     const handleDelete = (id: string) => {
         toast({
@@ -73,23 +93,37 @@ export default function CampaignsTable({ data, onEdit, onDelete }: CampaignsTabl
                                 </td>
                                 <td className="px-6 py-4 text-right">
                                     <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        {can('config_campaigns', 'campaigns', 'manage') && (
+                                        {isTrashView ? (
                                             <>
-                                                <button
-                                                    onClick={() => onEdit(item)}
-                                                    className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
-                                                    title="Editar"
-                                                >
-                                                    <PencilIcon className="w-5 h-5" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDelete(item.id)}
-                                                    className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                                                    title="Eliminar"
-                                                >
-                                                    <TrashIcon className="w-5 h-5" />
-                                                </button>
+                                                {can('config_campaigns', 'campaigns', 'purge') && (
+                                                    <button
+                                                        onClick={() => handlePurge(item.id)}
+                                                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                                                        title="Purgar Definitivamente"
+                                                    >
+                                                        <TrashIcon className="w-5 h-5" />
+                                                    </button>
+                                                )}
                                             </>
+                                        ) : (
+                                            can('config_campaigns', 'campaigns', 'manage') && (
+                                                <>
+                                                    <button
+                                                        onClick={() => onEdit(item)}
+                                                        className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
+                                                        title="Editar"
+                                                    >
+                                                        <PencilIcon className="w-5 h-5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDelete(item.id)}
+                                                        className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                                                        title="Eliminar"
+                                                    >
+                                                        <TrashIcon className="w-5 h-5" />
+                                                    </button>
+                                                </>
+                                            )
                                         )}
                                     </div>
                                 </td>

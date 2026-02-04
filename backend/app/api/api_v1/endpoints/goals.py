@@ -54,6 +54,7 @@ async def list_goals(
     db: AsyncSession = Depends(get_db),
     params: CommonQueryParams = Depends(),
     include_inactive: bool = False,
+    trashed: bool = False,
     current_user: UserProfile = Depends(get_current_user),
     _: bool = Depends(check_permission("goals", "read", module="config_goals"))
 ):
@@ -62,7 +63,6 @@ async def list_goals(
         .join(UserProfile, SalesGoal.user_id == UserProfile.id)
         .join(Campaign, SalesGoal.campaign_id == Campaign.id)
         .where(SalesGoal.tenant_id == current_user.tenant_id)
-        .where(UserProfile.is_deleted == False)
         .options(
             selectinload(SalesGoal.campaign).selectinload(Campaign.default_status),
             selectinload(SalesGoal.agent),
@@ -70,8 +70,18 @@ async def list_goals(
         )
     )
     
-    if not include_inactive:
-        query = query.where(SalesGoal.is_active == True)
+    if trashed:
+        query = query.where(SalesGoal.is_deleted == True)
+    else:
+        query = query.where(SalesGoal.is_deleted == False)
+        # Note: Users must be active to be seen? Maybe not necessarily for goals history.
+        # But UserProfile.is_deleted == False check was present.
+        # If looking at trash, maybe we still want to see goals of deleted users? 
+        # For now, let's keep user check for non-trashed view.
+        query = query.where(UserProfile.is_deleted == False)
+        
+        if not include_inactive:
+            query = query.where(SalesGoal.is_active == True)
     
     if params.search:
         from sqlalchemy import or_
@@ -184,19 +194,28 @@ async def purge_goal(
     _: bool = Depends(check_permission("goals", "purge", module="config_goals"))
 ):
     """PURGA DE META: Borrado físico irreversible."""
-    result = await db.execute(
-        select(SalesGoal)
-        .where(SalesGoal.id == goal_id)
-        .where(SalesGoal.tenant_id == current_user.tenant_id)
-    )
-    goal = result.scalar_one_or_none()
-    if not goal:
-        raise HTTPException(status_code=404, detail="Meta no encontrada.")
-        
     try:
-        await db.delete(goal)
+        from sqlalchemy import delete
+        
+        stmt = delete(SalesGoal).where(
+            SalesGoal.id == goal_id,
+            SalesGoal.tenant_id == current_user.tenant_id
+        )
+        
+        # logger.info(f"PURGING GOAL {goal_id} - SQL: {stmt}")
+        
+        result = await db.execute(stmt)
+        
+        # Explicit Flush
+        await db.flush()
         await db.commit()
+        
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Meta no encontrada o ya eliminada.")
+            
         return None
+    except HTTPException:
+        raise
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Error al purgar meta: {str(e)}")

@@ -41,6 +41,7 @@ class Tournament(TournamentBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     winner_name: Optional[str] = None
+    is_deleted: bool = False
 
     class Config:
         from_attributes = True

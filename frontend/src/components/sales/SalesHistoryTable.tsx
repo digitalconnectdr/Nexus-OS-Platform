@@ -12,7 +12,8 @@ import {
     EyeSlashIcon,
     FunnelIcon,
     XMarkIcon,
-    AdjustmentsHorizontalIcon
+    AdjustmentsHorizontalIcon,
+    ArchiveBoxXMarkIcon
 } from '@heroicons/react/24/outline';
 import { fetchFromAPI } from '@/lib/api';
 import RealTimeTable, { Sale } from '@/components/dashboard/RealTimeTable';
@@ -40,6 +41,7 @@ export default function SalesHistoryTable() {
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [pageIndex, setPageIndex] = useState(0);
     const [pageSize, setPageSize] = useState(20);
+    const [isTrashView, setIsTrashView] = useState(false);
 
     // Charts visibility state with localStorage persistence
     const [showCharts, setShowCharts] = useState<boolean>(() => {
@@ -50,51 +52,15 @@ export default function SalesHistoryTable() {
         return true;
     });
 
-    // Filter states with localStorage persistence
-    const [showFilters, setShowFilters] = useState<boolean>(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('history-show-filters');
-            return saved !== null ? JSON.parse(saved) : false; // Default: hidden
-        }
-        return false;
-    });
+    // ... (filters state)
 
-    const [activeFilters, setActiveFilters] = useState<FilterCriteria>(() => {
-        if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('history-active-filters');
-            return saved ? JSON.parse(saved) : {};
-        }
-        return {};
-    });
-
-    const [supervisors, setSupervisors] = useState<any[]>([]);
-
-    // Filter state for drill-down from charts
-    const [activeFilter, setActiveFilter] = useState<{
-        type: string;
-        value: string;
-        label: string;
-    } | null>(null);
-
-    // Save charts visibility preference
+    // Reload when changing view mode
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            localStorage.setItem('history-show-charts', JSON.stringify(showCharts));
-        }
-    }, [showCharts]);
+        setPageIndex(0);
+        loadData();
+    }, [isTrashView]);
 
-    // Save filter preferences
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            localStorage.setItem('history-show-filters', JSON.stringify(showFilters));
-        }
-    }, [showFilters]);
-
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            localStorage.setItem('history-active-filters', JSON.stringify(activeFilters));
-        }
-    }, [activeFilters]);
+    // ... 
 
     const loadData = async () => {
         setLoading(true);
@@ -105,6 +71,8 @@ export default function SalesHistoryTable() {
                 scope: 'history', // FORCE HISTORY SCOPE
                 sort_by: '-created_at'
             });
+
+            if (isTrashView) params.append('trashed', 'true');
 
             const [salesData, statusesData, campaignsData, supervisorsData] = await Promise.all([
                 fetchFromAPI(`/api/v1/sales/?${params.toString()}`),
@@ -220,6 +188,32 @@ export default function SalesHistoryTable() {
                     }}
                 >
                     ELIMINAR
+                </ToastAction>
+            )
+        });
+    };
+
+    const handlePurge = (id: string) => {
+        toast({
+            title: "☠️ ¿PURGAR VENTA?",
+            description: "Esta acción DESTRUIRÁ el registro y toda su trazabilidad. NO SE PUEDE DESHACER.",
+            variant: "destructive",
+            duration: Infinity,
+            action: (
+                <ToastAction
+                    altText="PURGAR"
+                    onClick={async () => {
+                        try {
+                            await fetchFromAPI(`/api/v1/sales/${id}?force=true`, { method: 'DELETE' });
+                            toast({ title: "Venta Purgada", description: "Registro eliminado definitivamente." });
+                            loadData();
+                        } catch (err: any) {
+                            toast({ title: "Error al purgar", description: err.message, variant: "destructive" });
+                        }
+                    }}
+                    className="bg-black text-white hover:bg-gray-900 border-none"
+                >
+                    DESTRUIR
                 </ToastAction>
             )
         });
@@ -345,6 +339,31 @@ export default function SalesHistoryTable() {
                     >
                         <ArrowPathIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                     </button>
+                    <div className="border-l border-slate-700 h-6 mx-2" />
+
+                    {/* Trash Toggle */}
+                    {can('history', 'delete') && (
+                        <button
+                            onClick={() => setIsTrashView(!isTrashView)}
+                            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-[10px] uppercase tracking-widest transition-all ${isTrashView
+                                ? 'bg-red-500 text-white shadow-lg shadow-red-500/50'
+                                : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
+                                }`}
+                            title={isTrashView ? "Volver a Historial" : "Ver Papelera de Ventas"}
+                        >
+                            {isTrashView ? (
+                                <>
+                                    <ArrowPathIcon className="w-3.5 h-3.5" />
+                                    <span>Activos</span>
+                                </>
+                            ) : (
+                                <>
+                                    <ArchiveBoxXMarkIcon className="w-3.5 h-3.5" />
+                                    <span>Papelera</span>
+                                </>
+                            )}
+                        </button>
+                    )}
                 </div>
             </header>
 
@@ -493,6 +512,8 @@ export default function SalesHistoryTable() {
                     campaigns={campaigns}
                     onUpdate={handleUpdate}
                     onDelete={handleDelete}
+                    isTrashView={isTrashView}
+                    onPurge={handlePurge}
                 />
             </div>
 

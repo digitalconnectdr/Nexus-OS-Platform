@@ -15,13 +15,23 @@ router = APIRouter()
 async def list_organizations(
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("organizations", "read", module="policies"))
+    _: bool = Depends(check_permission("organizations", "read", module="policies")),
+    trashed: bool = False
 ):
     """Listado de organizaciones vía SQL Directo"""
     stmt = select(Organization)
     
     if current_user.role != "Super Admin":
+        # Regular users can never see trashed orgs (security)
         stmt = stmt.where(Organization.id == current_user.tenant_id)
+        # Force active only
+        stmt = stmt.where(Organization.is_deleted == False)
+    else:
+        # Super Admin logic
+        if trashed:
+            stmt = stmt.where(Organization.is_deleted == True)
+        else:
+            stmt = stmt.where(Organization.is_deleted == False)
         
     result = await db.execute(stmt.order_by(Organization.created_at.desc()))
     return result.scalars().all()

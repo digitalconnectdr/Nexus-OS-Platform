@@ -19,11 +19,31 @@ interface GoalsTableProps {
     allAgents: any[];
     supervisors: any[];
     onRefresh: () => void;
+    isTrashView?: boolean;
+    onPurge?: (id: string) => void;
 }
 
-export default function GoalsTable({ data, allAgents, supervisors, onRefresh }: GoalsTableProps) {
+export default function GoalsTable({ data, allAgents, supervisors, onRefresh, isTrashView = false, onPurge }: GoalsTableProps) {
     const { can } = usePermission();
     const { toast } = useToast();
+
+    const handlePurge = (id: string) => {
+        toast({
+            title: "☠️ ¿Destruir Objetivo?",
+            description: "Esta acción ELIMINARÁ PERMANENTEMENTE el objetivo. Irreversible.",
+            variant: "destructive",
+            duration: Infinity,
+            action: (
+                <ToastAction
+                    altText="PURGAR"
+                    onClick={() => onPurge && onPurge(id)}
+                    className="bg-red-900 text-white hover:bg-black border-none px-4 font-black"
+                >
+                    DESTRUIR
+                </ToastAction>
+            ),
+        });
+    };
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [loadingStatus, setLoadingStatus] = useState<'idle' | 'loading' | 'error' | 'success'>('idle');
@@ -297,11 +317,17 @@ export default function GoalsTable({ data, allAgents, supervisors, onRefresh }: 
                                         {Number(goal.target_units || 0).toLocaleString()}
                                     </td>
                                     <td className="px-4 py-3 text-center flex justify-center gap-2">
-                                        {can('config_goals', 'goals', 'manage') && (
-                                            <>
-                                                <button onClick={() => handleEdit(goal)} className="p-1 text-gray-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors" title="Editar"><PencilIcon className="w-4 h-4" /></button>
-                                                <button onClick={() => handleDelete(goal.id)} className="p-1 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/20 rounded transition-colors" title="Eliminar"><TrashIcon className="w-4 h-4" /></button>
-                                            </>
+                                        {isTrashView ? (
+                                            can('config_goals', 'goals', 'purge') && (
+                                                <button onClick={() => handlePurge(goal.id)} className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors" title="Purgar"><TrashIcon className="w-4 h-4" /></button>
+                                            )
+                                        ) : (
+                                            can('config_goals', 'goals', 'manage') && (
+                                                <>
+                                                    <button onClick={() => handleEdit(goal)} className="p-1 text-gray-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors" title="Editar"><PencilIcon className="w-4 h-4" /></button>
+                                                    <button onClick={() => handleDelete(goal.id)} className="p-1 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/20 rounded transition-colors" title="Eliminar"><TrashIcon className="w-4 h-4" /></button>
+                                                </>
+                                            )
                                         )}
                                     </td>
                                 </tr>

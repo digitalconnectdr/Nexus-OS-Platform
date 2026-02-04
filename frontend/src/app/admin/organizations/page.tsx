@@ -34,12 +34,12 @@ export default function OrganizationsPage() {
     // Modal states
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
-    const [formData, setFormData] = useState({ name: '', slug: '' });
+    const [showDeleted, setShowDeleted] = useState(false);
 
     const fetchOrgs = async () => {
         setLoading(true);
         try {
-            const data = await fetchFromAPI('/api/v1/organizations/');
+            const data = await fetchFromAPI(`/api/v1/organizations/?trashed=${showDeleted}`);
             setOrgs(data);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al cargar organizaciones');
@@ -50,7 +50,7 @@ export default function OrganizationsPage() {
 
     useEffect(() => {
         fetchOrgs();
-    }, []);
+    }, [showDeleted]);
 
     const handleOpenModal = (org: Organization | null = null) => {
         setEditingOrg(org);
@@ -87,6 +87,35 @@ export default function OrganizationsPage() {
         } finally {
             setActionLoading(false);
         }
+    };
+
+    const handleRestore = (org: any) => {
+        toast({
+            title: "¿Restaurar Organización?",
+            description: `Se reactivará el acceso para "${org.name}".`,
+            action: (
+                <ToastAction
+                    altText="RESTAURAR"
+                    onClick={async () => {
+                        setActionLoading(true);
+                        try {
+                            await fetchFromAPI(`/api/v1/organizations/${org.id}`, {
+                                method: 'PATCH',
+                                body: JSON.stringify({ is_deleted: false })
+                            });
+                            toast({ title: "Organización Restaurada", description: "La organización está activa nuevamente." });
+                            fetchOrgs();
+                        } catch (err: any) {
+                            toast({ title: "Error", description: err.message, variant: "destructive" });
+                        } finally {
+                            setActionLoading(false);
+                        }
+                    }}
+                >
+                    RESTAURAR
+                </ToastAction>
+            )
+        });
     };
 
     const handleDelete = (id: string, name: string) => {
@@ -135,15 +164,27 @@ export default function OrganizationsPage() {
                     </p>
                 </div>
 
-                {canCreate && (
-                    <button
-                        onClick={() => handleOpenModal()}
-                        className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-200 transition-all uppercase tracking-tighter"
-                    >
-                        <PlusIcon className="w-5 h-5" />
-                        Nueva Organización
-                    </button>
-                )}
+                <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer select-none bg-white px-3 py-2 rounded-lg border border-slate-200">
+                        <input
+                            type="checkbox"
+                            checked={showDeleted}
+                            onChange={(e) => setShowDeleted(e.target.checked)}
+                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 transition-all"
+                        />
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ver Eliminados</span>
+                    </label>
+
+                    {canCreate && (
+                        <button
+                            onClick={() => handleOpenModal()}
+                            className="bg-blue-700 hover:bg-blue-800 text-white px-6 py-2.5 rounded-lg font-bold text-sm flex items-center gap-2 shadow-lg shadow-blue-200 transition-all uppercase tracking-tighter"
+                        >
+                            <PlusIcon className="w-5 h-5" />
+                            Nueva Organización
+                        </button>
+                    )}
+                </div>
             </header>
 
             {
@@ -176,14 +217,17 @@ export default function OrganizationsPage() {
                             <tr>
                                 <td colSpan={4} className="px-8 py-12 text-center text-slate-400 font-medium">No hay organizaciones registradas</td>
                             </tr>
-                        ) : orgs.map((org) => (
-                            <tr key={org.id} className="hover:bg-slate-50/30 transition-colors group">
+                        ) : orgs.map((org: any) => (
+                            <tr key={org.id} className={`hover:bg-slate-50/30 transition-colors group ${org.is_deleted ? 'opacity-60 grayscale bg-slate-50' : ''}`}>
                                 <td className="px-8 py-5 whitespace-nowrap">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 font-bold group-hover:bg-blue-600 group-hover:text-white transition-all">
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold transition-all ${org.is_deleted ? 'bg-slate-200 text-slate-500' : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'}`}>
                                             {org.name.charAt(0).toUpperCase()}
                                         </div>
-                                        <span className="font-bold text-slate-700 text-sm tracking-tight">{org.name}</span>
+                                        <div className="flex flex-col">
+                                            <span className="font-bold text-slate-700 text-sm tracking-tight">{org.name}</span>
+                                            {org.is_deleted && <span className="text-[9px] font-black text-red-500 uppercase tracking-widest">ELIMINADO</span>}
+                                        </div>
                                     </div>
                                 </td>
                                 <td className="px-8 py-5 whitespace-nowrap">
@@ -207,23 +251,39 @@ export default function OrganizationsPage() {
                                 </td>
                                 <td className="px-8 py-5 whitespace-nowrap text-right">
                                     <div className="flex justify-end gap-2">
-                                        {canEdit && (
-                                            <button
-                                                onClick={() => handleOpenModal(org)}
-                                                className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                                                title="Editar"
-                                            >
-                                                <PencilSquareIcon className="w-5 h-5" />
-                                            </button>
-                                        )}
-                                        {canDelete && (
-                                            <button
-                                                onClick={() => handleDelete(org.id, org.name)}
-                                                className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
-                                                title="Eliminar"
-                                            >
-                                                <TrashIcon className="w-5 h-5" />
-                                            </button>
+                                        {!org.is_deleted ? (
+                                            <>
+                                                {canEdit && (
+                                                    <button
+                                                        onClick={() => handleOpenModal(org)}
+                                                        className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                        title="Editar"
+                                                    >
+                                                        <PencilSquareIcon className="w-5 h-5" />
+                                                    </button>
+                                                )}
+                                                {canDelete && (
+                                                    <button
+                                                        onClick={() => handleDelete(org.id, org.name)}
+                                                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                                                        title="Eliminar"
+                                                    >
+                                                        <TrashIcon className="w-5 h-5" />
+                                                    </button>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <>
+                                                {canEdit && (
+                                                    <button
+                                                        onClick={() => handleRestore(org)}
+                                                        className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                                                        title="Restaurar"
+                                                    >
+                                                        <ArrowPathIcon className="w-5 h-5" />
+                                                    </button>
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                 </td>

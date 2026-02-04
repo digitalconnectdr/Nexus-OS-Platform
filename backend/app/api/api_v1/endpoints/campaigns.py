@@ -20,6 +20,7 @@ async def list_campaigns(
     limit: int = 100,
     size: int = None,
     include_inactive: bool = False,
+    trashed: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
     _: bool = Depends(check_permission("campaigns", "read", module="config_campaigns"))
@@ -29,8 +30,14 @@ async def list_campaigns(
         page_size = size if size is not None else limit
         stmt = select(Campaign).options(selectinload(Campaign.default_status)).where(Campaign.tenant_id == current_user.tenant_id)
         
-        if not include_inactive:
-            stmt = stmt.where(Campaign.is_active == True)
+        if trashed:
+            # Show ONLY deleted items
+            stmt = stmt.where(Campaign.is_deleted == True)
+        else:
+            # Show ONLY non-deleted items (default behavior)
+            stmt = stmt.where(Campaign.is_deleted == False)
+            if not include_inactive:
+                stmt = stmt.where(Campaign.is_active == True)
         
         # Pagination
         stmt = stmt.offset(skip).limit(page_size)
@@ -134,16 +141,28 @@ async def purge_campaign(
 ):
     """PURGA DE CAMPAÑA: Borrado físico irreversible."""
     try:
-        stmt = select(Campaign).where(Campaign.id == campaign_id, Campaign.tenant_id == current_user.tenant_id)
-        result = await db.execute(stmt)
-        db_campaign = result.scalar_one_or_none()
+        from sqlalchemy import delete
         
-        if not db_campaign:
-            raise HTTPException(status_code=404, detail="Campaña no encontrada")
-            
-        await db.delete(db_campaign)
+        # Hard Delete directo via SQL para evitar filtros de Soft Delete del ORM
+        stmt = delete(Campaign).where(
+            Campaign.id == campaign_id, 
+            Campaign.tenant_id == current_user.tenant_id
+        )
+        
+        logger.info(f"PURGING CAMPAIGN {campaign_id} - SQL: {stmt}")
+        
+        result = await db.execute(stmt)
+        
+        # Explicit Flush
+        await db.flush()
         await db.commit()
+        
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Campaña no encontrada o ya eliminada.")
+            
         return None
+    except HTTPException:
+        raise
     except Exception as e:
         await db.rollback()
         logger.error(f"Error purging campaign via SQL: {e}")

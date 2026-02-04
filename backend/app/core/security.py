@@ -86,9 +86,11 @@ async def get_current_user(
                         clean_tenant_id = x_tenant_id.strip('"').strip("'")
                         uuid_obj = uuid.UUID(clean_tenant_id)
                         current_tenant_id = str(uuid_obj)
-                        # Temporarily override in-memory for this request context
-                        db_user.tenant_id = uuid_obj
-                        print(f"🔄 CONTEXT OVERRIDE SUCCESS: {db_user.email} -> {current_tenant_id}")
+                        # CRITICAL FIX: Update in-memory ONLY. 
+                        # We modify __dict__ to bypass SQLAlchemy dirty tracking so this change 
+                        # is NOT persisted to the DB on commit, preventing FK errors or unwanted saves.
+                        db_user.__dict__['tenant_id'] = uuid_obj 
+                        print(f"🔄 CONTEXT SWITCH (Session Only): {db_user.email} -> {current_tenant_id}")
                     except ValueError: 
                         print(f"⚠️ Invalid x-tenant-id header ignored: {x_tenant_id}")
                         logger.warning(f"⚠️ Invalid x-tenant-id header ignored: {x_tenant_id}")

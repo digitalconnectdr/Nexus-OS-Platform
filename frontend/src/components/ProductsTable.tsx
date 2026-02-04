@@ -14,6 +14,8 @@ interface ProductsTableProps {
     onSelectAll: (ids: string[]) => void;
     onEdit: (item: any) => void;
     onDelete: (id: string) => void;
+    isTrashView?: boolean;
+    onPurge?: (id: string) => void;
     onToggleStatus: (item: any) => void;
 }
 
@@ -26,10 +28,30 @@ export default function ProductsTable({
     onSelectAll,
     onEdit,
     onDelete,
+    isTrashView = false,
+    onPurge,
     onToggleStatus
 }: ProductsTableProps) {
     const { can } = usePermission();
     const { toast } = useToast();
+
+    const handlePurge = (id: string) => {
+        toast({
+            title: "☠️ ¿Destruir Producto?",
+            description: "Esta acción ELIMINARÁ FÍSICAMENTE el producto. No se puede deshacer.",
+            variant: "destructive",
+            duration: Infinity,
+            action: (
+                <ToastAction
+                    altText="PURGAR"
+                    onClick={() => onPurge && onPurge(id)}
+                    className="bg-red-900 text-white hover:bg-black border-none px-4 font-black"
+                >
+                    DESTRUIR
+                </ToastAction>
+            ),
+        });
+    };
     // El filtrado ahora es Server-Side
     const isAllSelected = data.length > 0 && selectedIds.length === data.length;
 
@@ -133,23 +155,37 @@ export default function ProductsTable({
                             </td>
                             <td className="px-4 py-4 text-right whitespace-nowrap">
                                 <div className="flex justify-end items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {can('config_products', 'products', 'update') && (
-                                        <button
-                                            onClick={() => onEdit(product)}
-                                            className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
-                                            title="Editar"
-                                        >
-                                            <PencilIcon className="w-5 h-5" />
-                                        </button>
-                                    )}
-                                    {can('config_products', 'products', 'delete') && (
-                                        <button
-                                            onClick={() => handleDelete(product.id)}
-                                            className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
-                                            title="Eliminar"
-                                        >
-                                            <TrashIcon className="w-5 h-5" />
-                                        </button>
+                                    {isTrashView ? (
+                                        can('config_products', 'products', 'purge') && (
+                                            <button
+                                                onClick={() => handlePurge(product.id)}
+                                                className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                                                title="Purgar Definitivamente"
+                                            >
+                                                <TrashIcon className="w-5 h-5" />
+                                            </button>
+                                        )
+                                    ) : (
+                                        <>
+                                            {can('config_products', 'products', 'update') && (
+                                                <button
+                                                    onClick={() => onEdit(product)}
+                                                    className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md transition-colors"
+                                                    title="Editar"
+                                                >
+                                                    <PencilIcon className="w-5 h-5" />
+                                                </button>
+                                            )}
+                                            {can('config_products', 'products', 'delete') && (
+                                                <button
+                                                    onClick={() => handleDelete(product.id)}
+                                                    className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+                                                    title="Eliminar"
+                                                >
+                                                    <TrashIcon className="w-5 h-5" />
+                                                </button>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             </td>

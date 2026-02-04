@@ -53,4 +53,5 @@ class ProductResponse(ProductBase): # Renamed to match user's expected name
     tenant_id: UUID
     campaign_id: Optional[UUID] = None
     campaign_name: Optional[str] = None
+    is_deleted: bool = False
     model_config = ConfigDict(from_attributes=True)
