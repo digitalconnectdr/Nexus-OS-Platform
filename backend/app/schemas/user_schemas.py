@@ -11,7 +11,6 @@ class UserRole(str, Enum):
     GERENTE = "gerente"
     SUPERVISOR_SENIOR = "supervisor_senior"
     SUPERVISOR = "supervisor"
-    LIDER = "lider"  # Keep for backward compatibility if needed, or map to supervisor
     REPRESENTANTE = "representante"
     DPTO_ESTADISTICA = "dpto_estadistica"
     SEGUIMIENTO = "seguimiento"
@@ -23,13 +22,19 @@ class UserRole(str, Enum):
     def _missing_(cls, value: object):
         """Handle legacy/variant role strings by normalizing them before validation."""
         if isinstance(value, str):
-            normalized = value.lower().replace(" ", "_").strip()
-            # Special case mapping if needed
-            if normalized == "super_admin":
-                return cls.SUPER_ADMIN
-            # Try to return the member if it matches the normalized value
+            val = value.lower().strip()
+            # Explicit English -> Spanish Mappings
+            mapping = {
+                "representative": "representante",
+                "agent": "representante",
+                "admin": "administrador",
+                "manager": "gerente",
+                "super admin": "super_admin"
+            }
+            target = mapping.get(val, val).replace(" ", "_")
+            
             for member in cls:
-                if member.value == normalized:
+                if member.value == target:
                     return member
         return None
 

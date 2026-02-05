@@ -6,9 +6,9 @@ import os
 MATRIX = {
     # --- DASHBOARD ---
     "dashboard": {
-        "access": ["super_admin", "administrador", "gerente", "supervisor_senior", "supervisor", "representative", "representante"],
+        "access": ["super_admin", "administrador", "gerente", "supervisor_senior", "supervisor", "representante"],
         "sales": {
-            "read": ["super_admin", "administrador", "gerente", "supervisor_senior", "supervisor", "representative", "representante"],
+            "read": ["super_admin", "administrador", "gerente", "supervisor_senior", "supervisor", "representante"],
             "create": ["super_admin", "administrador", "gerente", "supervisor_senior", "supervisor", "representante"], # Agents create sales
             "update": ["super_admin", "administrador", "gerente", "supervisor_senior", "supervisor"], # Edit sales
             "change_status": ["super_admin", "administrador", "gerente", "supervisor_senior", "supervisor", "auditor_calidad"], # Status workflow

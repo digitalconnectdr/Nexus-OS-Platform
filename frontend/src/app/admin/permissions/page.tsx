@@ -38,10 +38,18 @@ interface PermissionEntry {
     is_allowed: boolean;
 }
 
-const ROLES = [
-    "Super Admin", "Administrador", "Cliente", "Gerente",
-    "Supervisor Senior", "Supervisor", "Dpto Estadistica",
-    "Auditor Calidad", "Seguimiento", "Digitación", "Representante"
+const ROLES_CONFIG = [
+    { id: "super_admin", label: "Super Admin" },
+    { id: "administrador", label: "Administrador" },
+    { id: "gerente", label: "Gerente" },
+    { id: "supervisor_senior", label: "Supervisor Senior" },
+    { id: "supervisor", label: "Supervisor" },
+    { id: "representante", label: "Representante" },
+    { id: "dpto_estadistica", label: "Dpto Estadistica" },
+    { id: "seguimiento", label: "Seguimiento" },
+    { id: "auditor_calidad", label: "Auditor Calidad" },
+    { id: "digitacion", label: "Digitación" },
+    { id: "cliente", label: "Cliente" }
 ];
 
 const MODULE_CONFIG: Record<string, { label: string, icon: any, color: string }> = {
@@ -192,9 +200,9 @@ export default function PermissionsPage() {
                                         <span>Funcionalidad</span>
                                     </div>
                                 </th>
-                                {ROLES.map(role => (
-                                    <th key={role} className={`py-2.5 px-2 text-center border-b border-slate-200 border-r border-slate-100 w-[100px] min-w-[100px] font-semibold text-slate-600 uppercase tracking-tighter text-[10px] ${role === 'Super Admin' ? 'bg-blue-50/50' : ''}`}>
-                                        {role}
+                                {ROLES_CONFIG.map(role => (
+                                    <th key={role.id} className={`py-2.5 px-2 text-center border-b border-slate-200 border-r border-slate-100 w-[100px] min-w-[100px] font-semibold text-slate-600 uppercase tracking-tighter text-[10px] ${role.id === 'super_admin' ? 'bg-blue-50/50' : ''}`}>
+                                        {role.label}
                                     </th>
                                 ))}
                             </tr>
@@ -211,7 +219,7 @@ export default function PermissionsPage() {
                                             onClick={() => setCollapsedModules(prev => ({ ...prev, [module]: !prev[module] }))}
                                             className="bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer sticky top-[37px] z-40"
                                         >
-                                            <td colSpan={ROLES.length + 1} className="px-4 py-1.5 border-b border-slate-200">
+                                            <td colSpan={ROLES_CONFIG.length + 1} className="px-4 py-1.5 border-b border-slate-200">
                                                 <div className="flex items-center gap-2">
                                                     {isCollapsed ? <ChevronRightIcon className="w-3.5 h-3.5" /> : <ChevronDownIcon className="w-3.5 h-3.5" />}
                                                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{modConfig.label}</span>
@@ -231,16 +239,16 @@ export default function PermissionsPage() {
                                                     <td className="py-2 pl-4 border-r border-slate-100 sticky left-0 z-20 bg-white group-hover:bg-slate-50 transition-colors shadow-[4px_0_12px_rgba(0,0,0,0.05)] max-w-[350px]">
                                                         <span className="text-sm font-medium text-slate-700 tracking-tight whitespace-normal break-words block">{label}</span>
                                                     </td>
-                                                    {ROLES.map(role => {
-                                                        const p = rolePerms[role];
-                                                        const cellKey = `${role}-${funcKey}`;
+                                                    {ROLES_CONFIG.map(role => {
+                                                        const p = rolePerms[role.id];
+                                                        const cellKey = `${role.id}-${funcKey}`;
                                                         const isUpdating = loadingStates[cellKey];
-                                                        const isDisabled = !isSuperAdmin || role === 'Super Admin';
+                                                        const isDisabled = !isSuperAdmin || role.id === 'super_admin';
 
-                                                        if (!p) return <td key={role} className="py-2 border-r border-slate-100 bg-slate-50/10" />;
+                                                        if (!p) return <td key={role.id} className="py-2 border-r border-slate-100 bg-slate-50/10" />;
 
                                                         return (
-                                                            <td key={role} className="py-2 border-r border-slate-100 text-center bg-transparent">
+                                                            <td key={role.id} className="py-2 border-r border-slate-100 text-center bg-transparent">
                                                                 <div className="flex justify-center items-center h-full">
                                                                     <div className="relative">
                                                                         <Switch
