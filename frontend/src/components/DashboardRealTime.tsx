@@ -149,7 +149,7 @@ export default function DashboardRealTime() {
             setSupervisors(supervisorsData?.items || (Array.isArray(supervisorsData) ? supervisorsData : []));
 
             // Fetch Active Tournaments for Race Track
-            if (can?.('tournaments', 'view_race_track')) {
+            if (can?.('tournaments', 'tournaments', 'view_race_track')) {
                 try {
                     const tourns = await fetchFromAPI("/api/v1/tournaments/");
                     if (tourns && Array.isArray(tourns)) {
@@ -187,7 +187,7 @@ export default function DashboardRealTime() {
 
         // --- CONDITIONAL FETCHING ---
         // Access restricted by functional matrix
-        if (!can?.('dashboard', 'view')) {
+        if (!can?.('dashboard', 'dashboard', 'access')) {
             setLoading(false);
             return;
         }
@@ -200,7 +200,7 @@ export default function DashboardRealTime() {
     }, [pageIndex, pageSize, permsLoading, can]);
 
     // --- GRACEFUL FALLBACK ---
-    if (!permsLoading && !can?.('dashboard', 'view')) {
+    if (!permsLoading && !can?.('dashboard', 'dashboard', 'access')) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-400 space-y-4">
                 <div className="p-4 bg-slate-100 rounded-full">
@@ -208,7 +208,7 @@ export default function DashboardRealTime() {
                 </div>
                 <h3 className="text-sm font-black uppercase tracking-widest">Bienvenido a NEXUS OS</h3>
                 <p className="text-[10px] font-bold uppercase tracking-wider max-w-xs text-center line-height-relaxed opacity-60">
-                    Tu perfil actual no posee permisos para visualizar el Dashboard Real-Time. Contacta a tu administrador para habilitar 'dashboard:view'.
+                    Tu perfil actual no posee permisos para visualizar el Dashboard Real-Time. Contacta a tu administrador para habilitar 'dashboard:access'.
                 </p>
             </div>
         );
@@ -381,7 +381,7 @@ export default function DashboardRealTime() {
                         Sistema Online
                     </span>
 
-                    {can('dashboard', 'export') && (
+                    {can('dashboard', 'sales', 'export') && (
                         <button
                             onClick={() => setIsExportModalOpen(true)}
                             className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 h-10 rounded-xl shadow-lg shadow-emerald-100 dark:shadow-none transition-all group flex items-center gap-2 active:scale-95"
@@ -392,7 +392,7 @@ export default function DashboardRealTime() {
                             <span className="text-[10px] font-black uppercase tracking-widest text-white">Exportar</span>
                         </button>
                     )}
-                    {can('commission_calculator', 'view') && (
+                    {can('dashboard', 'finance', 'view_calculator') && (
                         <button
                             onClick={() => setIsCommissionOpen(true)}
                             className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 h-10 rounded-xl shadow-lg shadow-indigo-100 dark:shadow-none transition-all group flex items-center gap-2 active:scale-95 border border-indigo-500/30"
@@ -406,7 +406,7 @@ export default function DashboardRealTime() {
             </header>
 
             {/* Dashboard Controls (Race Track Toggle) */}
-            {can('tournaments', 'view_race_track') && (
+            {can('tournaments', 'tournaments', 'view_race_track') && (
                 <div className="flex justify-end">
                     <button
                         onClick={() => setShowRaceTrack(!showRaceTrack)}
@@ -426,7 +426,7 @@ export default function DashboardRealTime() {
             {/* Content Toolbar - Consistent with other modules */}
             <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4 shadow-sm">
                 <div className="flex items-center gap-4">
-                    {can('dashboard', 'filters') && (
+                    {can('dashboard', 'dashboard', 'access') && (
                         <button
                             onClick={() => setShowFilters(!showFilters)}
                             className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-sm active:scale-95 border
@@ -459,7 +459,7 @@ export default function DashboardRealTime() {
 
 
             {/* ADVANCED FILTERS SECTION */}
-            {showFilters && can('dashboard', 'filters') && (
+            {showFilters && can('dashboard', 'dashboard', 'access') && (
                 <AdvancedFilters
                     statuses={statuses}
                     campaigns={campaigns}
@@ -472,7 +472,7 @@ export default function DashboardRealTime() {
             )}
 
             {/* ACTIVE FILTERS INDICATOR */}
-            {activeFilterCount > 0 && can('dashboard', 'filters') && (
+            {activeFilterCount > 0 && can('dashboard', 'dashboard', 'access') && (
                 <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
                     <div className="flex items-center gap-3 flex-wrap">
                         <FunnelIcon className="w-5 h-5 text-blue-600 flex-shrink-0" />
@@ -524,7 +524,7 @@ export default function DashboardRealTime() {
             {/* Dashboard Content: Horizontal Race Track + Full Width Table */}
             <div className="space-y-6">
                 {/* Race Track Section (Multi-Tournament) */}
-                {can?.('tournaments', 'view_race_track') && showRaceTrack && tournamentsData.length > 0 && (
+                {can?.('tournaments', 'tournaments', 'view_race_track') && showRaceTrack && tournamentsData.length > 0 && (
                     <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
                         {tournamentsData.map((tData) => (
                             <TournamentRaceTrack

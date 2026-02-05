@@ -19,10 +19,24 @@ class UserRole(str, Enum):
     DIGITACION = "digitacion"
     CLIENTE = "cliente"
 
+    @classmethod
+    def _missing_(cls, value: object):
+        """Handle legacy/variant role strings by normalizing them before validation."""
+        if isinstance(value, str):
+            normalized = value.lower().replace(" ", "_").strip()
+            # Special case mapping if needed
+            if normalized == "super_admin":
+                return cls.SUPER_ADMIN
+            # Try to return the member if it matches the normalized value
+            for member in cls:
+                if member.value == normalized:
+                    return member
+        return None
+
 class UserProfileBase(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
-    role: Optional[Any] = None # Cambiado a Any temporalmente para evitar 422 si hay roles raros
+    role: Optional[UserRole] = None 
     tenant_id: Optional[UUID] = None # Added for easier access
     avatar_url: Optional[str] = None
     is_active: bool = True

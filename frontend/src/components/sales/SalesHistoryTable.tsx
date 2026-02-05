@@ -36,6 +36,7 @@ export default function SalesHistoryTable() {
     const [sales, setSales] = useState<Sale[]>([]);
     const [statuses, setStatuses] = useState<any[]>([]);
     const [campaigns, setCampaigns] = useState<any[]>([]);
+    const [supervisors, setSupervisors] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [totalRecords, setTotalRecords] = useState(0);
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
@@ -52,7 +53,10 @@ export default function SalesHistoryTable() {
         return true;
     });
 
-    // ... (filters state)
+    // Filter states
+    const [showFilters, setShowFilters] = useState(false);
+    const [activeFilters, setActiveFilters] = useState<FilterCriteria>({});
+    const [activeFilter, setActiveFilter] = useState<{ type: string, value: string, label: string } | null>(null);
 
     // Reload when changing view mode
     useEffect(() => {
@@ -60,8 +64,12 @@ export default function SalesHistoryTable() {
         loadData();
     }, [isTrashView]);
 
-    // ... 
-
+    // Persistent UI preferences
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('history-show-charts', JSON.stringify(showCharts));
+        }
+    }, [showCharts]);
     const loadData = async () => {
         setLoading(true);
         try {
@@ -135,7 +143,7 @@ export default function SalesHistoryTable() {
     useEffect(() => {
         if (permsLoading) return;
         // CRASH PROTECTION: Safe Check
-        const hasAccess = can ? can('history', 'view') : false;
+        const hasAccess = can ? can('history', 'sales', 'read_history') : false;
         if (!hasAccess) return;
 
         loadData();
@@ -143,7 +151,7 @@ export default function SalesHistoryTable() {
 
     if (!permsLoading) {
         // CRASH PROTECTION: Safe Check
-        const hasAccess = can ? can('history', 'view') : false;
+        const hasAccess = can ? can('history', 'sales', 'read_history') : false;
         if (!hasAccess) {
             return (
                 <div className="flex flex-col items-center justify-center min-h-[60vh] text-slate-400 space-y-4">
@@ -152,7 +160,7 @@ export default function SalesHistoryTable() {
                     </div>
                     <h3 className="text-sm font-black uppercase tracking-widest text-[#072D44]">Bóveda de Historial Bloqueada</h3>
                     <p className="text-[10px] font-bold uppercase tracking-wider max-w-xs text-center line-height-relaxed opacity-60">
-                        Tu perfil actual no posee permisos para consultar el Historial Maestro. Contacta a un administrador para habilitar 'history:view'.
+                        Tu perfil actual no posee permisos para consultar el Historial Maestro. Contacta a un administrador para habilitar 'history:sales:read_history'.
                     </p>
                 </div>
             );
@@ -326,7 +334,7 @@ export default function SalesHistoryTable() {
                         <span className="text-sm font-black">{totalRecords.toLocaleString()}</span>
                     </div>
 
-                    {can('history', 'export') && (
+                    {can('history', 'sales', 'export_history') && (
                         <button
                             onClick={() => setIsExportModalOpen(true)}
                             className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 h-10 rounded-xl shadow-lg shadow-emerald-100 transition-all group flex items-center gap-2 active:scale-95"
@@ -348,7 +356,7 @@ export default function SalesHistoryTable() {
                     <div className="border-l border-slate-700 h-6 mx-2" />
 
                     {/* Trash Toggle */}
-                    {can('history', 'delete') && (
+                    {can('history', 'sales', 'delete_soft') && (
                         <button
                             onClick={() => setIsTrashView(!isTrashView)}
                             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg font-bold text-[10px] uppercase tracking-widest transition-all ${isTrashView
@@ -377,7 +385,7 @@ export default function SalesHistoryTable() {
             <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4 shadow-sm">
                 <div className="flex items-center gap-4">
                     {/* Toggle Charts */}
-                    {can('history', 'charts') && (
+                    {can('history', 'sales', 'read_history') && (
                         <button
                             onClick={() => setShowCharts(!showCharts)}
                             className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-sm active:scale-95 border
@@ -391,7 +399,7 @@ export default function SalesHistoryTable() {
                     <div className="h-6 w-px bg-slate-200 dark:bg-slate-800" />
 
                     {/* Toggle Filters */}
-                    {can('history', 'filters') && (
+                    {can('history', 'sales', 'read_history') && (
                         <button
                             onClick={() => setShowFilters(!showFilters)}
                             className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-sm active:scale-95 border
@@ -416,7 +424,7 @@ export default function SalesHistoryTable() {
             </div>
 
             {/* ADVANCED FILTERS SECTION */}
-            {showFilters && can('history', 'filters') && (
+            {showFilters && can('history', 'sales', 'read_history') && (
                 <AdvancedFilters
                     statuses={statuses}
                     campaigns={campaigns}
@@ -429,7 +437,7 @@ export default function SalesHistoryTable() {
             )}
 
             {/* ACTIVE FILTERS INDICATOR (from Advanced Filters) */}
-            {activeFilterCount > 0 && can('history', 'filters') && (
+            {activeFilterCount > 0 && can('history', 'sales', 'read_history') && (
                 <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
                     <div className="flex items-center gap-3 flex-wrap">
                         <FunnelIcon className="w-5 h-5 text-blue-600 flex-shrink-0" />
@@ -455,7 +463,7 @@ export default function SalesHistoryTable() {
             )}
 
             {/* ACTIVE FILTER INDICATOR (from Chart Drill-Down) */}
-            {activeFilter && can('history', 'charts') && (
+            {activeFilter && can('history', 'sales', 'read_history') && (
                 <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
                     <div className="flex items-center gap-3">
                         <FunnelIcon className="w-5 h-5 text-blue-600" />
@@ -475,7 +483,7 @@ export default function SalesHistoryTable() {
             )}
 
             {/* INTERACTIVE CHARTS SECTION */}
-            {showCharts && can('history', 'charts') && (
+            {showCharts && can('history', 'sales', 'read_history') && (
                 <div className="space-y-4">
                     <div className="flex items-center gap-2">
                         <ChartBarIcon className="w-5 h-5 text-[#072D44]" />

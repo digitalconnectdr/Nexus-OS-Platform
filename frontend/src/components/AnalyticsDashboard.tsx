@@ -29,10 +29,10 @@ export default function AnalyticsDashboard() {
 
     // Filter allowed tabs
     const allowedTabs = [
-        { id: 'scorecard', label: 'Scorecard Agentes', perm: 'performance:scorecard' },
-        { id: 'backoffice', label: 'Digitación & Backoffice', perm: 'performance:backoffice' },
-        { id: 'efficiency', label: 'Eficiencia Operativa', perm: 'performance:efficiency' }
-    ].filter(tab => can('performance', tab.perm.split(':')[1]));
+        { id: 'scorecard', label: 'Scorecard Agentes', canSee: can('dashboard', 'dashboard', 'access') },
+        { id: 'backoffice', label: 'Digitación & Backoffice', canSee: can('performance', 'backoffice', 'read') },
+        { id: 'efficiency', label: 'Eficiencia Operativa', canSee: can('dashboard', 'dashboard', 'access') }
+    ].filter(tab => tab.canSee);
 
     const activeTab = (urlTab || (allowedTabs[0]?.id || 'scorecard')) as Tab;
     const [subTab, setSubTab] = useState<'hierarchy' | 'campaign'>('hierarchy');
@@ -118,7 +118,7 @@ export default function AnalyticsDashboard() {
                     </div>
 
                     {/* Export Trigger */}
-                    {can('performance', 'reports') && (
+                    {can('dashboard', 'dashboard', 'access') && (
                         <button
                             onClick={() => setIsExportModalOpen(true)}
                             className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 h-10 rounded-xl shadow-lg shadow-emerald-100 dark:shadow-none transition-all group flex items-center gap-2 active:scale-95"

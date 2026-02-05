@@ -50,7 +50,7 @@ export default function Sidebar() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                 ),
-                show: can('dashboard', 'sales', 'read')
+                show: can('dashboard', 'dashboard', 'access')
             },
             {
                 name: 'Historial Ventas',
@@ -91,10 +91,11 @@ export default function Sidebar() {
                     </svg>
                 ),
                 show: (
-                    can('config_campaigns', 'campaigns', 'read') ||
-                    can('config_products', 'products', 'read') ||
-                    can('config_goals', 'goals', 'read') ||
-                    can('config_statuses', 'statuses', 'read')
+                    can('config', 'campaigns', 'view_tab') ||
+                    can('config', 'products', 'view_tab') ||
+                    can('config', 'goals', 'view_tab') ||
+                    can('config', 'statuses', 'view_tab') ||
+                    can('config', 'policies', 'view_tab')
                 )
             }
         ];
@@ -102,9 +103,9 @@ export default function Sidebar() {
     }, [can]);
 
     const adminItems = useMemo(() => {
-        const hasUsersAccess = can('config_users', 'users', 'read');
-        const hasPermsAccess = can('policies', 'permissions', 'read');
-        const hasOrgsAccess = can('policies', 'organizations', 'view_tab');
+        const hasUsersAccess = can('users', 'users', 'access');
+        const hasPermsAccess = can('config', 'permissions', 'view_tab');
+        const hasOrgsAccess = can('config', 'tenants', 'view_tab');
 
         const items = [
             {
@@ -137,7 +138,7 @@ export default function Sidebar() {
                 name: '🏆 Torneos',
                 href: '/admin/tournaments',
                 icon: <Trophy className="w-5 h-5" />,
-                show: can('tournaments', 'view_module')
+                show: can('tournaments', 'tournaments', 'view_module')
             },
             {
                 name: 'Estado del Sistema',
@@ -147,7 +148,7 @@ export default function Sidebar() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                 ),
-                show: can('system', 'monitor')
+                show: can('ops', 'ops', 'view_tab')
             }
         ];
         return items.filter(i => i.show);

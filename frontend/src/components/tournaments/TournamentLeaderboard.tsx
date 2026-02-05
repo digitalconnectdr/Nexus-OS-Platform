@@ -43,7 +43,7 @@ export const TournamentLeaderboard = () => {
     // HARD GUARD: Only render if user is authenticated and not loading permissions
     if (!user || permsLoading) return null;
 
-    const canManageTournaments = can?.('tournaments', 'manage');
+    const canManageTournaments = can?.('tournaments', 'tournaments', 'manage');
 
     const loadTournaments = async () => {
         try {

@@ -49,6 +49,7 @@ const MODULE_CONFIG: Record<string, { label: string, icon: any, color: string }>
     'history': { label: 'Historial Ventas', icon: CircleStackIcon, color: 'text-indigo-600' },
     'performance': { label: 'Gestión del Desempeño', icon: BriefcaseIcon, color: 'text-emerald-600' },
     'finance': { label: 'Gestión Financiera', icon: CurrencyDollarIcon, color: 'text-orange-600' },
+    'users': { label: 'Gestión de Usuarios', icon: UserGroupIcon, color: 'text-sky-600' },
     'config_campaigns': { label: 'Catálogo: Campañas', icon: Bars3Icon, color: 'text-purple-600' },
     'config_products': { label: 'Catálogo: Productos', icon: TagIcon, color: 'text-pink-600' },
     'config_goals': { label: 'Catálogo: Objetivos', icon: TagIcon, color: 'text-rose-600' },
@@ -56,10 +57,11 @@ const MODULE_CONFIG: Record<string, { label: string, icon: any, color: string }>
     'config_users': { label: 'Usuarios (Config)', icon: UserGroupIcon, color: 'text-sky-600' },
     'config_policies': { label: 'Políticas de Rol', icon: KeyIcon, color: 'text-gray-600' },
     'users_manager': { label: 'Gestión Usuarios', icon: UserGroupIcon, color: 'text-blue-800' },
-    'PERMISSIONS': { label: 'MATRIZ PERMISOS', icon: ShieldCheckIcon, color: 'text-indigo-600' },
-    'ORGANIZATIONS': { label: 'ORGANIZACIONES', icon: BuildingOfficeIcon, color: 'text-slate-600' },
-    'COMPETENCIAS': { label: 'COMPETENCIAS', icon: Trophy, color: 'text-yellow-600' },
-    'OPS': { label: 'ESTADO SISTEMA', icon: CpuChipIcon, color: 'text-rose-600' },
+    'permissions': { label: 'Matriz Permisos', icon: ShieldCheckIcon, color: 'text-indigo-600' },
+    'config': { label: 'Configuración Sistema', icon: Cog6ToothIcon, color: 'text-slate-600' },
+    'tournaments': { label: 'Torneos y Competencias', icon: Trophy, color: 'text-yellow-600' },
+    'ops': { label: 'Estado del Sistema', icon: CpuChipIcon, color: 'text-rose-600' },
+    'system': { label: 'Núcleo del Sistema', icon: ShieldCheckIcon, color: 'text-gray-600' },
 };
 
 export default function PermissionsPage() {
@@ -145,7 +147,7 @@ export default function PermissionsPage() {
         const matrix: Record<string, Record<string, Record<string, PermissionEntry>>> = {};
 
         rawPermissions.forEach(p => {
-            const mod = p.module.toUpperCase();
+            const mod = p.module.toLowerCase();
             const funcKey = `${p.resource}:${p.action}`;
 
             if (!matrix[mod]) matrix[mod] = {};
