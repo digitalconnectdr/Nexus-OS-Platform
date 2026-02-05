@@ -6,17 +6,18 @@ from enum import Enum
 import json
 
 class UserRole(str, Enum):
-    SUPER_ADMIN = "Super Admin"
-    ADMINISTRADOR = "Administrador"
-    CLIENTE = "Cliente"
-    GERENTE = "Gerente"
-    SUPERVISOR_SENIOR = "Supervisor Senior"
-    SUPERVISOR = "Supervisor"
-    DPTO_ESTADISTICA = "Dpto Estadistica"
-    AUDITOR_CALIDAD = "Auditor Calidad"
-    SEGUIMIENTO = "Seguimiento"
-    DIGITACION = "Digitación"
-    REPRESENTANTE = "Representante"
+    SUPER_ADMIN = "super_admin"
+    ADMINISTRADOR = "administrador"
+    GERENTE = "gerente"
+    SUPERVISOR_SENIOR = "supervisor_senior"
+    SUPERVISOR = "supervisor"
+    LIDER = "lider"  # Keep for backward compatibility if needed, or map to supervisor
+    REPRESENTANTE = "representante"
+    DPTO_ESTADISTICA = "dpto_estadistica"
+    SEGUIMIENTO = "seguimiento"
+    AUDITOR_CALIDAD = "auditor_calidad"
+    DIGITACION = "digitacion"
+    CLIENTE = "cliente"
 
 class UserProfileBase(BaseModel):
     first_name: Optional[str] = None

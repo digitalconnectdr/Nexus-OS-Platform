@@ -123,7 +123,7 @@ async def get_telemetry(
     request: Request,
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("system", "monitor"))
+    _: bool = Depends(check_permission("ops", "view_tab", module="ops"))
 ):
     """System telemetry: CPU, RAM, DB, Health Checks, Errors."""
     try:
@@ -172,7 +172,7 @@ async def request_backup(
     org_id: uuid.UUID,
     background_tasks: BackgroundTasks,
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("system", "maintenance"))
+    _: bool = Depends(check_permission("ops", "view_tab", module="ops"))
 ):
     """ Initiate a background backup task. """
     if current_user.role != UserRole.SUPER_ADMIN:
@@ -184,7 +184,7 @@ async def request_backup(
 @router.get("/backups/recent")
 async def get_recent_backups(
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("system", "monitor"))
+    _: bool = Depends(check_permission("ops", "view_tab", module="ops"))
 ):
     """ List generated backup files from static directory. """
     exports_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "static", "exports")
@@ -212,7 +212,7 @@ async def get_recent_backups(
 @router.post("/clear-cache")
 async def clear_cache(
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("system", "maintenance"))
+    _: bool = Depends(check_permission("ops", "view_tab", module="ops"))
 ):
     """ Flush application caches. """
     # Placeholder for Redis or in-mem cache flush
@@ -225,7 +225,7 @@ async def run_maintenance(
     month: int,
     background_tasks: BackgroundTasks,
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("system", "maintenance"))
+    _: bool = Depends(check_permission("ops", "view_tab", module="ops"))
 ):
     """ Purge old data using background throttling. """
     if current_user.role != UserRole.SUPER_ADMIN:

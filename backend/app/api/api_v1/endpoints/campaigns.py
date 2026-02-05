@@ -24,7 +24,7 @@ async def list_campaigns(
     trashed: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("campaigns", "read", module="config_campaigns"))
+    _: bool = Depends(check_permission("campaigns", "view_tab", module="config"))
 ):
     """Listado de campañas vía SQLAlchemy con relaciones"""
     try:
@@ -54,7 +54,7 @@ async def create_campaign(
     campaign_in: CampaignCreate,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("campaigns", "create", module="config_campaigns"))
+    _: bool = Depends(check_permission("campaigns", "view_tab", module="config"))
 ):
     """Alta de campaña vía SQL"""
     try:
@@ -89,7 +89,7 @@ async def update_campaign(
     campaign_in: CampaignUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("campaigns", "update", module="config_campaigns"))
+    _: bool = Depends(check_permission("campaigns", "view_tab", module="config"))
 ):
     """Actualización de campaña vía SQL"""
     try:
@@ -121,7 +121,7 @@ async def delete_campaign(
     campaign_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("campaigns", "delete", module="config_campaigns"))
+    _: bool = Depends(check_permission("campaigns", "view_tab", module="config"))
 ):
     """Baja lógica vía SQL"""
     try:
@@ -146,7 +146,7 @@ async def purge_campaign(
     campaign_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("campaigns", "purge", module="config_campaigns"))
+    _: bool = Depends(check_permission("campaigns", "view_tab", module="config"))
 ):
     """PURGA DE CAMPAÑA: Borrado físico irreversible."""
     try:

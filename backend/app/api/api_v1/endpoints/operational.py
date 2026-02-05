@@ -50,7 +50,7 @@ async def get_operational_results(
     month: str = Query(..., description="Format YYYY-MM"),
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("performance", "efficiency", module="performance"))
+    _: bool = Depends(check_permission("dashboard", "access", module="dashboard"))
 ):
     prev_month = get_prev_month(month)
     

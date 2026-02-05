@@ -19,7 +19,7 @@ async def create_goals_bulk(
     goals_in: MonthlyGoalBulkCreate,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("goals", "create", module="config_goals"))
+    _: bool = Depends(check_permission("goals", "view_tab", module="config"))
 ):
     new_goals = []
     for goal_item in goals_in.items:
@@ -56,7 +56,7 @@ async def list_goals(
     include_inactive: bool = False,
     trashed: bool = False,
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("goals", "read", module="config_goals"))
+    _: bool = Depends(check_permission("goals", "view_tab", module="config"))
 ):
     query = (
         select(SalesGoal)
@@ -108,7 +108,7 @@ async def create_goal(
     goal_in: MonthlyGoalCreate,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("goals", "create", module="config_goals"))
+    _: bool = Depends(check_permission("goals", "view_tab", module="config"))
 ):
     goal_data = goal_in.model_dump()
     if goal_data.get("product_family"):
@@ -139,7 +139,7 @@ async def update_goal(
     goal_in: MonthlyGoalUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("goals", "update", module="config_goals"))
+    _: bool = Depends(check_permission("goals", "view_tab", module="config"))
 ):
     result = await db.execute(
         select(SalesGoal)
@@ -170,7 +170,7 @@ async def delete_goal(
     goal_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("goals", "delete", module="config_goals"))
+    _: bool = Depends(check_permission("goals", "view_tab", module="config"))
 ):
     result = await db.execute(
         select(SalesGoal)
@@ -191,7 +191,7 @@ async def purge_goal(
     goal_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("goals", "purge", module="config_goals"))
+    _: bool = Depends(check_permission("goals", "view_tab", module="config"))
 ):
     """PURGA DE META: Borrado físico irreversible."""
     try:

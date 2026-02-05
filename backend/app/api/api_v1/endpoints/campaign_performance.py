@@ -55,7 +55,7 @@ async def get_campaign_performance(
     month: str = Query(..., description="Format YYYY-MM"),
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(deps.get_db),
-    _: bool = Depends(check_permission("performance", "read", module="performance"))
+    _: bool = Depends(check_permission("dashboard", "access", module="dashboard"))
 ):
     """VERSION DB DIRECT - Bypass REST API"""
     logger.info(f"📊 Loading campaign performance via SQL for {month} (Tenant: {current_user.tenant_id})")
@@ -280,7 +280,7 @@ async def export_campaign_performance(
     month: str = Query(..., description="Format YYYY-MM"),
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(deps.get_db),
-    _: bool = Depends(check_permission("performance", "export", module="performance"))
+    _: bool = Depends(check_permission("dashboard", "access", module="dashboard"))
 ):
     """Genera un reporte CSV con el rendimiento de campañas y productos."""
     try:

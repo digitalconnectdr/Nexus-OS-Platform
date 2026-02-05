@@ -110,78 +110,60 @@ async def get_current_user(
 def check_permission(resource: str, action: str, module: Optional[str] = None):
     """
     FastAPI Dependency to check RBAC permissions.
-    Usage: Depends(check_permission("users", "write", module="config"))
+    Usage: Depends(check_permission("users", "create", module="users"))
     """
+    # 0. Normalization (TECHNICAL REQUIREMENT: Lowercase everything for DB sync)
+    resource = resource.lower() if resource else resource
+    action = action.lower() if action else action
+    if module:
+        module = module.lower()
+
     async def dependency(
         user: UserProfile = Depends(get_current_user), 
         db: AsyncSession = Depends(get_db)
     ):
+        # 1. Master Key: Super Admin Bypass (Immediate & Handled BEFORE logs)
+        # NORMALIZATION: Ensure role enters lowercase for matching
+        role_str = str(user.role).lower().strip()
+        
+        # Exact truth bypass for Juan Carlos and other super admins
+        if role_str in ["super_admin", "super admin"]:
+            return True
+
         import logging
         logger = logging.getLogger(__name__)
         
-        log_msg = f"🔐 Checking permission: {module or '*'}:{resource}:{action} for user {user.email}"
-        logger.info(log_msg)
-        
-        # 1. Bypass Supremo
-        if user.role == UserRole.SUPER_ADMIN:
-            return True
+        # Log detected role for diagnostic flow
+        logger.info(f"DEBUG: User role detected: [{user.role}]")
             
         from sqlalchemy import func
         
-        # 2. Granular Verification in Matrix
-        target_role = user.role
-        if hasattr(target_role, "value"):
-            role_str = target_role.value
-        else:
-            role_str = str(target_role)
-            
-        # Clean up any potential "UserRole.NAME" stringification
-        if "." in role_str and not any(r in role_str for r in ["Representante", "Digitación", "Seguimiento"]): 
-            role_str = role_str.split(".")[-1]
-            
+        # 2. Strict Verification
         filters = [
-            func.lower(RolePermission.role) == role_str.lower(),
-            func.lower(RolePermission.resource) == resource.lower(),
-            func.lower(RolePermission.action) == action.lower(),
+            RolePermission.role == role_str,
+            RolePermission.resource == resource,
+            RolePermission.action == action,
             RolePermission.tenant_id == user.tenant_id
         ]
+        
         if module:
-            filters.append(func.lower(RolePermission.module) == module.lower())
+            filters.append(RolePermission.module == module)
             
-        query = select(RolePermission).where(*filters)
+        # We query for an ALLOWED permission
+        query = select(RolePermission).where(*filters, RolePermission.is_allowed == True)
         
         result = await db.execute(query)
         perm = result.scalar_one_or_none()
         
-        if not perm or not perm.is_allowed:
-            logger.error(f"❌ Permission DENIED for {user.email}: {resource}:{action} (Module: {module}). Filters: Role={role_str}, Tenant={user.tenant_id}")
-            if perm:
-                logger.error(f"   Record found but is_allowed={perm.is_allowed}")
-            else:
-                logger.error(f"   No record found in role_permissions matrix for filters above.")
+        if not perm:
+            logger.warning(f"⛔ ACCESS DENIED for {user.email} ({role_str}): {module}:{resource}:{action}")
             
-            # Spanish Translation Mapping
-            labels = {
-                "sales": "Ventas", "products": "Productos", "finance": "Finanzas",
-                "users": "Usuarios", "campaigns": "Campañas", "goals": "Metas",
-                "organizations": "Organización",
-                "read": "Ver", "create": "Crear", "update": "Editar", "delete": "Borrar",
-                "write": "Escribir", "export": "Exportar", "read_own": "Ver Propio",
-                "read_global": "Ver Global", "read_summary": "Ver Resumen",
-                "configure": "Configurar"
-            }
-            
-            res_label = labels.get(resource, resource.capitalize())
-            act_label = labels.get(action, action.capitalize())
-            
-            error_msg = f"⛔ Acceso Denegado: No tienes permisos suficientes para '{act_label} {res_label}'."
-            
+            # Zero Translation Error Message
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=error_msg
+                detail=f"Access Denied: {module}:{resource}:{action}"
             )
         
-        logger.info(f"✅ Permission granted via matrix for {user.email}")
         return True
         
     return dependency

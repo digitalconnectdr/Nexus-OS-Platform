@@ -17,7 +17,7 @@ router = APIRouter()
 async def list_role_policies(
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("policies", "read", module="policies"))
+    _: bool = Depends(check_permission("policies", "view_tab", module="config"))
 ):
     """Lista las políticas de ruteo por rol de la organización."""
     result = await db.execute(
@@ -30,7 +30,7 @@ async def get_role_policy(
     role: str,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("policies", "read", module="policies"))
+    _: bool = Depends(check_permission("policies", "view_tab", module="config"))
 ):
     """Obtiene la política de un rol específico dentro de la organización."""
     result = await db.execute(
@@ -49,7 +49,7 @@ async def create_or_update_policy(
     policy_in: RolePolicyCreate,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("policies", "update", module="policies"))
+    _: bool = Depends(check_permission("policies", "view_tab", module="config"))
 ):
     """Crea o actualiza una política de rol para la organización actual."""
     # Forzar el tenant_id del usuario actual por seguridad
@@ -85,7 +85,7 @@ async def update_role_policy(
     policy_in: RolePolicyUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("policies", "update", module="policies"))
+    _: bool = Depends(check_permission("policies", "view_tab", module="config"))
 ):
     """Actualiza parcialmente una política de la organización."""
     result = await db.execute(
@@ -112,7 +112,7 @@ async def check_availability(
     product: str = None,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("policies", "read", module="policies"))
+    _: bool = Depends(check_permission("policies", "view_tab", module="config"))
 ):
     """Endpoint para que el frontend verifique disponibilidad de un usuario."""
     try:

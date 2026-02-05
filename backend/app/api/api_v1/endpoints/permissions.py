@@ -53,7 +53,7 @@ async def get_mock_admin_user(db: AsyncSession = Depends(get_db)):
 async def list_permissions(
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("permissions", "read", module="policies"))
+    _: bool = Depends(check_permission("permissions", "view_tab", module="config"))
 ):
     """
     Returns the matrix grouped by Module -> Resource for the user's organization.
@@ -94,7 +94,7 @@ async def toggle_status(
     toggle: PermissionToggle,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("permissions", "update", module="policies"))
+    _: bool = Depends(check_permission("permissions", "view_tab", module="config"))
 ):
     """
     Updates the is_allowed value for a specific role, resource, and action.

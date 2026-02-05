@@ -74,7 +74,7 @@ async def list_users(
     role: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("users", "read", module="config_users"))
+    _: bool = Depends(check_permission("users", "access", module="users"))
 ):
     """Listado de usuarios vía SQLAlchemy Directo (Aislamiento Multi-tenant)"""
     logger.info(f"🚀 Loading users via SQLAlchemy: page={page}, size={size}, search={search}")
@@ -141,7 +141,7 @@ async def create_user(
     user_in: UserIdentityCreate,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("users", "create", module="config_users"))
+    _: bool = Depends(check_permission("users", "access", module="users"))
 ):
     # 1. Obtener niveles
     creator_level = get_role_level(current_user.role)
@@ -222,7 +222,7 @@ async def update_user(
     user_in: UserProfileBase, # Partial updates
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("users", "update", module="config_users"))
+    _: bool = Depends(check_permission("users", "access", module="users"))
 ):
     """Actualización de usuario vía SQLAlchemy (Aislamiento Estricto)"""
     # 1. Localizar usuario
@@ -287,7 +287,7 @@ async def update_user_put(
     user_in: UserProfileBase,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("users", "update", module="config_users"))
+    _: bool = Depends(check_permission("users", "access", module="users"))
 ):
     """Alias PUT para actualización completa o parcial (Legacy Support)"""
     return await update_user(user_id, user_in, db, current_user)
@@ -297,7 +297,7 @@ async def reactivate_user(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("users", "update", module="config_users"))
+    _: bool = Depends(check_permission("users", "access", module="users"))
 ):
     """Reactivación de usuario vía SQLAlchemy"""
     stmt = select(UserProfile).where(UserProfile.id == user_id)
@@ -326,7 +326,7 @@ async def update_password(
     user_id: UUID,
     pwd_in: UserPasswordUpdate,
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("users", "update", module="config_users"))
+    _: bool = Depends(check_permission("users", "access", module="users"))
 ):
     if pwd_in.password != pwd_in.confirm_password:
         raise HTTPException(status_code=400, detail="Las contraseñas no coinciden")
@@ -353,7 +353,7 @@ async def delete_user(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("users", "delete", module="config_users"))
+    _: bool = Depends(check_permission("users", "access", module="users"))
 ):
     """
     Soft-delete de usuario. Requiere permiso explícito en la matriz.
@@ -394,7 +394,7 @@ async def purge_user(
     user_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("users", "purge", module="config_users"))
+    _: bool = Depends(check_permission("users", "access", module="users"))
 ):
     """
     PURGA DE USUARIO (Borrado Físico Irreversible).

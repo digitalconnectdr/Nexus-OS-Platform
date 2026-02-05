@@ -6,7 +6,7 @@ from app.api.deps import get_db
 from app.models.status import Status
 from app.schemas.core import StatusOut, StatusCreate
 from app.core.supabase import supabase_admin
-from app.core.security import get_current_user
+from app.core.security import get_current_user, check_permission
 from app.models.core import UserProfile
 from uuid import UUID
 
@@ -19,6 +19,7 @@ async def list_statuses(
     include_inactive: bool = False,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("statuses", "view_tab", module="config"))
 ):
     """Listado de estados vía SQL Directo"""
     stmt = select(Status).where(Status.tenant_id == current_user.tenant_id)
@@ -32,7 +33,8 @@ async def list_statuses(
 async def create_status(
     status_in: StatusCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: UserProfile = Depends(get_current_user)
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("statuses", "view_tab", module="config"))
 ):
     # Enforce tenant_id from current_user
     status_data = status_in.model_dump()
@@ -57,7 +59,8 @@ async def update_status(
     status_id: UUID,
     status_in: StatusCreate, # Reuse create schema for simplicity
     db: AsyncSession = Depends(get_db),
-    current_user: UserProfile = Depends(get_current_user)
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("statuses", "view_tab", module="config"))
 ):
     result = await db.execute(
         select(Status)
@@ -87,7 +90,8 @@ async def update_status(
 async def bulk_save_statuses(
     statuses_in: List[dict],
     db: AsyncSession = Depends(get_db),
-    current_user: UserProfile = Depends(get_current_user)
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("statuses", "view_tab", module="config"))
 ):
     try:
         # Enforce tenant_id from current_user
@@ -143,7 +147,8 @@ async def bulk_save_statuses(
 async def delete_status(
     status_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: UserProfile = Depends(get_current_user)
+    current_user: UserProfile = Depends(get_current_user),
+    _: bool = Depends(check_permission("statuses", "view_tab", module="config"))
 ):
     result = await db.execute(
         select(Status)

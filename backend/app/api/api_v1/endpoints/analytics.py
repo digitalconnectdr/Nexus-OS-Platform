@@ -183,7 +183,7 @@ async def get_efficiency_data(
     campaign_id: Optional[str] = Query(None),
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(deps.get_db),
-    _: bool = Depends(check_permission("performance", "efficiency", module="performance"))
+    _: bool = Depends(check_permission("dashboard", "access", module="dashboard"))
 ):
     """
     Versión resiliente que acepta rango de fechas o mes.
@@ -237,7 +237,7 @@ async def get_scorecard_agents(
     campaign_id: Optional[str] = Query(None),
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(deps.get_db),
-    _: bool = Depends(check_permission("performance", "scorecard", module="performance"))
+    _: bool = Depends(check_permission("dashboard", "access", module="dashboard"))
 ):
     """
     Endpoint para el Scorecard 360 de Agentes.
@@ -294,7 +294,7 @@ async def get_scorecard_backoffice(
     month: str,
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(deps.get_db),
-    _: bool = Depends(check_permission("performance", "backoffice", module="performance"))
+    _: bool = Depends(check_permission("backoffice", "read", module="performance"))
 ):
     """Mide eficiencia y precisión del equipo con rol 'Digitacion'"""
     try:
@@ -400,7 +400,7 @@ async def get_scorecard_followup(
     month: str,
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(deps.get_db),
-    _: bool = Depends(check_permission("performance", "scorecard", module="performance"))
+    _: bool = Depends(check_permission("dashboard", "access", module="dashboard"))
 ):
     """Mide conversión y resolución del equipo con rol 'Seguimiento'"""
     try:
@@ -518,7 +518,7 @@ async def export_scorecard_data(
     campaign_id: str = Query(None, description="Filter by campaign"),
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(deps.get_db),
-    _: bool = Depends(check_permission("performance", "reports", module="performance"))
+    _: bool = Depends(check_permission("dashboard", "access", module="dashboard"))
 ):
     """
     Genera un reporte CSV con datos del scorecard de agentes.
@@ -923,7 +923,7 @@ async def get_dashboard_data(
     end_date: str = Query(..., description="YYYY-MM-DD"),
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(deps.get_db),
-    _: bool = Depends(check_permission("operational", "read"))
+    _: bool = Depends(check_permission("dashboard", "access", module="dashboard"))
 ):
     """
     VERSION SQL DIRECT - Bypass Cloudflare Logs
@@ -1052,7 +1052,7 @@ async def export_efficiency_data(
     campaign_id: str = Query(None, description="Filter by campaign"),
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("operational", "export"))
+    _: bool = Depends(check_permission("dashboard", "access", module="dashboard"))
 ):
     """
     Genera un reporte CSV con datos de eficiencia operativa.
@@ -1159,7 +1159,7 @@ from app.schemas.commission import CommissionProjectionResponse, CommissionTier,
 async def get_commission_projection(
     current_user: UserProfile = Depends(get_current_user),
     db: AsyncSession = Depends(deps.get_db),
-    _: bool = Depends(check_permission("commission_calculator", "view", module="analytics"))
+    _: bool = Depends(check_permission("commission_calculator", "read", module="analytics"))
 ):
     """
     Calculates commission projection based on current month performance.

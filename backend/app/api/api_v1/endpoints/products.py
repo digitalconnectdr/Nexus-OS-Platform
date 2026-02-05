@@ -24,7 +24,7 @@ router = APIRouter()
 async def get_skills_manifest(
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("products", "read", module="config_products"))
+    _: bool = Depends(check_permission("products", "view_tab", module="config"))
 ):
     """Genera el manifiesto de habilidades vía SQL Directo"""
     try:
@@ -71,7 +71,7 @@ async def list_products(
     trashed: bool = False,
     campaign_id: Optional[UUID] = Query(None),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("products", "read", module="config_products"))
+    _: bool = Depends(check_permission("products", "view_tab", module="config"))
 ):
     query = select(Product).options(joinedload(Product.campaign)).where(Product.tenant_id == current_user.tenant_id)
     
@@ -98,7 +98,7 @@ async def create_product(
     product_in: ProductCreate,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("products", "create", module="config_products"))
+    _: bool = Depends(check_permission("products", "view_tab", module="config"))
 ):
     """Alta de producto vía SQL Directo"""
     try:
@@ -141,7 +141,7 @@ async def update_product(
     product_in: ProductUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("products", "update", module="config_products"))
+    _: bool = Depends(check_permission("products", "view_tab", module="config"))
 ):
     """Actualización de producto vía SQL Directo"""
     try:
@@ -173,7 +173,7 @@ async def delete_product(
     product_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("products", "delete", module="config_products"))
+    _: bool = Depends(check_permission("products", "view_tab", module="config"))
 ):
     """Soft delete vía SQL"""
     try:
@@ -199,7 +199,7 @@ async def purge_product(
     product_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("products", "purge", module="config_products"))
+    _: bool = Depends(check_permission("products", "view_tab", module="config"))
 ):
     """PURGA DE PRODUCTO: Borrado físico irreversible."""
     try:
@@ -236,7 +236,7 @@ async def list_product_families(
     campaign_id: UUID = Query(...),
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("products", "read", module="config_products"))
+    _: bool = Depends(check_permission("products", "view_tab", module="config"))
 ):
     """Returns a DISTINCT list of family names for a campaign."""
     query = (
@@ -257,7 +257,7 @@ async def list_product_names(
     family_name: str = Query(...),
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("products", "read", module="config_products"))
+    _: bool = Depends(check_permission("products", "view_tab", module="config"))
 ):
     """Returns a DISTINCT list of product names for a campaign and family."""
     query = (
@@ -284,7 +284,7 @@ async def list_product_plans(
     family_name: Optional[str] = Query(None),
     product_name: Optional[str] = Query(None),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("products", "read", module="config_products"))
+    _: bool = Depends(check_permission("products", "view_tab", module="config"))
 ):
     """Returns the list of specific items (plans) for a campaign, family and product."""
     query = (
@@ -340,7 +340,7 @@ async def import_products(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("products", "create", module="config_products"))
+    _: bool = Depends(check_permission("products", "view_tab", module="config"))
 ):
     """Procesa un archivo CSV para crear o actualizar productos vía SQL."""
     content = await file.read()
@@ -450,7 +450,7 @@ async def import_products(
 async def export_products(
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("products", "export", module="config_products"))
+    _: bool = Depends(check_permission("products", "view_tab", module="config"))
 ):
     """Exports all active products as a CSV file."""
     # --- AUDITORÍA: Registrar descarga ---
@@ -506,7 +506,7 @@ async def batch_delete_products(
     ids: List[UUID],
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("products", "delete", module="config_products"))
+    _: bool = Depends(check_permission("products", "view_tab", module="config"))
 ):
     """Baja masiva lógica vía SQL."""
     try:
@@ -532,7 +532,7 @@ async def get_product(
     product_id: UUID,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("products", "read", module="config_products"))
+    _: bool = Depends(check_permission("products", "view_tab", module="config"))
 ):
     result = await db.execute(
         select(Product)
@@ -552,7 +552,7 @@ async def get_product(
 async def list_all_active_products_lite(
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("products", "read", module="config_products"))
+    _: bool = Depends(check_permission("products", "view_tab", module="config"))
 ):
     """Returns a lite, unpaginated list of all active products for UI selectors."""
     query = (

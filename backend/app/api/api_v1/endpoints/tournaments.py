@@ -21,7 +21,7 @@ router = APIRouter()
 async def read_tournaments(
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("tournaments", "view_module")),
+    _: bool = Depends(check_permission("battle", "read", module="tournaments")),
     skip: int = 0,
     limit: int = 100,
     trashed: bool = False
@@ -59,7 +59,7 @@ async def create_tournament(
     *,
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("tournaments", "create_battle")),
+    _: bool = Depends(check_permission("battle", "create", module="tournaments")),
     tournament_in: TournamentCreate
 ):
     """Create a new tournament (Admin only)."""
@@ -79,7 +79,7 @@ async def get_leaderboard(
     tournament_id: UUID,
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("tournaments", "view_race_track"))
+    _: bool = Depends(check_permission("battle", "read", module="tournaments"))
 ):
     """Calculate and return the live leaderboard for a tournament."""
     # check_permission implemented as dependency
@@ -192,7 +192,7 @@ async def disqualify_agent(
     reason: str,
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("tournaments", "arbitration_panel"))
+    _: bool = Depends(check_permission("battle", "update", module="tournaments"))
 ):
     """Disqualify an agent from a tournament (Admin only)."""
     # check_permission implemented as dependency
@@ -220,7 +220,7 @@ async def award_prize(
     award_value: Optional[float] = 0,
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("tournaments", "arbitration_panel"))
+    _: bool = Depends(check_permission("battle", "update", module="tournaments"))
 ):
     """Award a prize to an agent in a tournament (Admin only)."""
     stmt = select(TournamentParticipation).where(
@@ -259,7 +259,7 @@ async def update_tournament(
     *,
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("tournaments", "edit")),
+    _: bool = Depends(check_permission("battle", "create", module="tournaments")),
     tournament_in: TournamentUpdate
 ):
     """Update a tournament (Admin only)."""
@@ -287,7 +287,7 @@ async def delete_tournament(
     tournament_id: UUID,
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("tournaments", "delete"))
+    _: bool = Depends(check_permission("battle", "create", module="tournaments"))
 ):
     """Delete a tournament (Admin only)."""
     stmt = select(Tournament).where(
@@ -310,7 +310,7 @@ async def purge_tournament(
     tournament_id: UUID,
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("tournaments", "purge"))
+    _: bool = Depends(check_permission("battle", "create", module="tournaments"))
 ):
     """PURGA DE TORNEO: Borrado físico irreversible."""
     stmt = select(Tournament).where(

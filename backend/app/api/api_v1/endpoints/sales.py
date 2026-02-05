@@ -42,19 +42,17 @@ async def read_sales(
 ):
     """Listado de ventas vía SQL Directo"""
     # 1. Permission checks
-    permissions_to_check = ["sales:read", "dashboard:view"]
-    if scope == "history":
-        permissions_to_check.extend(["sales:read_history", "history:view"])
-    
+    # 1. Permission checks
     has_permission = False
-    for p_name in permissions_to_check:
-        try:
-            res, act = p_name.split(":")
-            checker = check_permission(res, act)
-            await checker(current_user, db)
-            has_permission = True
-            break
-        except HTTPException: continue
+    try:
+        if scope == "history":
+             checker = check_permission("sales", "read_history", module="history")
+        else:
+             checker = check_permission("sales", "read", module="dashboard")
+        await checker(current_user, db)
+        has_permission = True
+    except HTTPException:
+        pass
             
     if not has_permission:
         logger.warning(f"🚫 Access Denied: {current_user.email}")
@@ -265,7 +263,7 @@ async def delete_sale(
 ):
     # --- DYNAMIC PERMISSION CHECK (Dashboard OR History) ---
     has_perm = False
-    for mod, res, act in [("dashboard", "sales", "delete"), ("history", "history_sales", "delete")]:
+    for mod, res, act in [("dashboard", "sales", "delete_soft"), ("history", "sales", "delete_soft")]:
         try:
             checker = check_permission(res, act, module=mod)
             await checker(current_user, db)
@@ -299,7 +297,7 @@ async def purge_sale(
     sale_id: uuid.UUID,
     db: AsyncSession = Depends(deps.get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("sales", "purge", module="dashboard"))
+    _: bool = Depends(check_permission("sales", "delete_hard", module="dashboard"))
 ):
     """
     PURGA DE VENTA: Borrado físico irreversible.
@@ -350,13 +348,13 @@ async def update_sale(
     
     perms_to_check = [
         ("dashboard", "sales", "update"),
-        ("history", "history_sales", "update")
+        ("history", "sales", "update")
     ]
     
     if is_only_status:
         perms_to_check.extend([
             ("dashboard", "sales", "change_status"),
-            ("history", "history_sales", "change_status")
+            ("history", "sales", "change_status")
         ])
     
     has_perm = False
@@ -522,7 +520,7 @@ async def export_sales(
 ):
     # --- DYNAMIC FUNCTIONAL PERMISSION CHECK ---
     if scope == "history":
-        checker = check_permission("sales", "export", module="history")
+        checker = check_permission("sales", "export_history", module="history")
     else:
         checker = check_permission("sales", "export", module="dashboard")
     

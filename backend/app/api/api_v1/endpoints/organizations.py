@@ -15,7 +15,7 @@ router = APIRouter()
 async def list_organizations(
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("organizations", "view_tab", module="policies")),
+    _: bool = Depends(check_permission("organizations", "view_tab", module="config")),
     trashed: bool = False
 ):
     """Listado de organizaciones vía SQL Directo"""
@@ -41,7 +41,7 @@ async def create_organization(
     org_in: OrganizationCreate,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("organizations", "create", module="policies"))
+    _: bool = Depends(check_permission("organizations", "view_tab", module="config"))
 ):
     """Crea una organización vía SQL Directo"""
     if not org_in.slug:
@@ -97,7 +97,7 @@ async def update_organization(
     org_in: OrganizationUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("organizations", "update", module="policies"))
+    _: bool = Depends(check_permission("organizations", "view_tab", module="config"))
 ):
     """Actualiza organización vía SQL"""
     try:
@@ -133,7 +133,7 @@ async def update_organization_put(
     org_in: OrganizationUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("organizations", "update", module="policies"))
+    _: bool = Depends(check_permission("organizations", "view_tab", module="config"))
 ):
     """Alias PUT para actualización de organizaciones"""
     return await update_organization(org_id, org_in, db, current_user)
@@ -143,7 +143,7 @@ async def delete_organization(
     org_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("organizations", "delete", module="policies"))
+    _: bool = Depends(check_permission("organizations", "view_tab", module="config"))
 ):
     """Elimina organización vía SQL Directo"""
     try:
