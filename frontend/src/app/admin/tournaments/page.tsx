@@ -39,6 +39,7 @@ import {
     DialogDescription,
     DialogFooter
 } from "@/components/ui/dialog";
+import { TournamentRaceTrack } from '@/components/tournaments/TournamentRaceTrack';
 
 interface Tournament {
     id: string;
@@ -105,7 +106,9 @@ export default function TournamentManagementPage() {
     const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
 
     // Navigation state
-    const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
+    const [activeTab, setActiveTab] = useState<'active' | 'history' | 'positions'>('active');
+    const [tournamentsData, setTournamentsData] = useState<any[]>([]);
+    const [loadingPositions, setLoadingPositions] = useState(false);
 
     // Arbitration state
     const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
@@ -127,13 +130,36 @@ export default function TournamentManagementPage() {
     useEffect(() => { loadData(); }, []);
 
     useEffect(() => {
-        if (selCampaign) {
-            loadCampaignProducts(selCampaign);
-        } else {
-            setCampaignFamilies([]);
-            setPointsConfig({});
+        if (activeTab === 'positions') {
+            loadTournamentsData();
+            const interval = setInterval(loadTournamentsData, 30000); // 30s refresh
+            return () => clearInterval(interval);
         }
-    }, [selCampaign]);
+    }, [activeTab]);
+
+    const loadTournamentsData = async () => {
+        if (tournaments.length === 0) return;
+        setLoadingPositions(true);
+        try {
+            const activeTourns = tournaments.filter(t => t.is_active);
+            const dataWithLB = await Promise.all(activeTourns.map(async (t) => {
+                try {
+                    const lb = await fetchFromAPI(`/api/v1/tournaments/${t.id}/leaderboard`);
+                    return {
+                        tournament: t,
+                        leaderboard: lb?.entries || []
+                    };
+                } catch (lbErr) {
+                    return { tournament: t, leaderboard: [] };
+                }
+            }));
+            setTournamentsData(dataWithLB);
+        } catch (err) {
+            console.error("Error loading tournament positions:", err);
+        } finally {
+            setLoadingPositions(false);
+        }
+    };
 
     const loadData = async () => {
         try {
@@ -296,7 +322,7 @@ export default function TournamentManagementPage() {
     };
 
     if (permsLoading || loading) return <LoadingState message="Configurando Módulo Nexus..." />;
-    if (!can('tournaments', 'view_module')) return <div className="p-20 text-center font-black text-slate-400 uppercase tracking-widest">No tienes permiso para visualizar este módulo. RECURSO: tournaments:view_module</div>;
+    if (!can('tournaments', 'tournaments', 'view_module')) return <div className="p-20 text-center font-black text-slate-400 uppercase tracking-widest">No tienes permiso para visualizar este módulo. RECURSO: tournaments:view_module</div>;
 
     return (
         <div className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-8 animate-fade-in">
@@ -318,6 +344,14 @@ export default function TournamentManagementPage() {
                         >
                             Activos
                         </button>
+                        {can('tournaments', 'tournaments', 'live_positions') && (
+                            <button
+                                onClick={() => setActiveTab('positions')}
+                                className={`px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'positions' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm border border-slate-200 dark:border-slate-600' : 'text-slate-400 hover:text-slate-600'}`}
+                            >
+                                Posiciones
+                            </button>
+                        )}
                         <button
                             onClick={() => setActiveTab('history')}
                             className={`px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'history' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm border border-slate-200 dark:border-slate-600' : 'text-slate-400 hover:text-slate-600'}`}
@@ -326,7 +360,7 @@ export default function TournamentManagementPage() {
                         </button>
                     </div>
 
-                    {can('tournaments', 'create_battle') && (
+                    {can('tournaments', 'tournaments', 'create_battle') && (
                         <Button
                             onClick={() => setIsCreating(true)}
                             className="bg-blue-600 hover:bg-blue-700 text-white h-11 px-8 rounded-xl shadow-lg shadow-blue-500/20 font-black uppercase text-[10px] tracking-widest flex items-center gap-2 transition-all active:scale-95"
@@ -542,7 +576,7 @@ export default function TournamentManagementPage() {
                                         </div>
 
                                         <div className="flex items-center gap-6 relative z-10 pr-2">
-                                            {can('tournaments', 'arbitration_panel') && (
+                                            {can('tournaments', 'tournaments', 'arbitration_panel') && (
                                                 <Button
                                                     onClick={() => loadLeaderboard(t)}
                                                     className="h-10 px-6 bg-gradient-to-br from-sky-400 to-sky-500 hover:from-sky-500 hover:to-sky-600 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest transition-all group shadow-lg shadow-sky-400/20 border border-white/10 ring-1 ring-inset ring-white/10 active:scale-95 shadow-[inset_0_1px_1px_rgba(255,255,255,0.3)]"
@@ -553,7 +587,7 @@ export default function TournamentManagementPage() {
                                             )}
 
                                             <div className="flex items-center gap-1 border-l border-slate-100 dark:border-slate-800/50 pl-4 ml-2">
-                                                {can('tournaments', 'edit') && (
+                                                {can('tournaments', 'tournaments', 'edit') && (
                                                     <button
                                                         title="Editar"
                                                         onClick={() => openEdit(t)}
@@ -562,7 +596,7 @@ export default function TournamentManagementPage() {
                                                         <Edit2 className="w-5 h-5" />
                                                     </button>
                                                 )}
-                                                {can('tournaments', 'delete') && (
+                                                {can('tournaments', 'tournaments', 'delete') && (
                                                     <button
                                                         title="Eliminar"
                                                         onClick={() => {
@@ -580,6 +614,38 @@ export default function TournamentManagementPage() {
                                 );
                             })}
                         </div>
+                    </motion.div>
+                ) : activeTab === 'positions' ? (
+                    <motion.div
+                        key="positions-list"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="space-y-6"
+                    >
+                        {loadingPositions && tournamentsData.length === 0 ? (
+                            <div className="py-20 flex flex-col items-center justify-center gap-4">
+                                <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sincronizando Marcadores...</p>
+                            </div>
+                        ) : tournamentsData.length > 0 ? (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-8 pb-20">
+                                {tournamentsData.map((tData) => (
+                                    <div key={tData.tournament.id} className="animate-in fade-in zoom-in-95 duration-500">
+                                        <TournamentRaceTrack
+                                            tournamentName={tData.tournament.name}
+                                            participants={tData.leaderboard}
+                                            targetPoints={tData.tournament.target_points}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="py-24 text-center border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-[2rem] bg-slate-50/30 dark:bg-slate-900/10">
+                                <Trophy className="w-12 h-12 text-slate-200 dark:text-slate-800 mx-auto mb-4" />
+                                <h3 className="text-sm font-black text-slate-400 uppercase tracking-[0.3em]">No hay competencias activas en curso</h3>
+                            </div>
+                        )}
                     </motion.div>
                 ) : (
                     <motion.div

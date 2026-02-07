@@ -29,7 +29,9 @@ RESOURCE_MODULE_MAP = {
     "conversations": "CHAT",
     "scorecards": "QUALITY",
     "evaluations": "QUALITY",
-    "commission_calculator": "ANALYTICS"
+    "commission_calculator": "ANALYTICS",
+    "tournaments": "TOURNAMENTS",
+    "battle": "TOURNAMENTS"
 }
 
 router = APIRouter()

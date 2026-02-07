@@ -74,6 +74,13 @@ async def create_tournament(
     await db.refresh(db_obj)
     return db_obj
 
+import time
+
+# --- CACHE ESTRATÉGICO DE DESEMPEÑO ---
+# Almacena: (tournament_id, tenant_id) -> (timestamp, LeaderboardResponse)
+LEADERBOARD_CACHE = {}
+CACHE_TTL = 10.0 # Segundos
+
 @router.get("/{tournament_id}/leaderboard", response_model=LeaderboardResponse)
 async def get_leaderboard(
     tournament_id: UUID,
@@ -81,9 +88,19 @@ async def get_leaderboard(
     current_user: UserProfile = Depends(get_current_user),
     _: bool = Depends(check_permission("battle", "read", module="tournaments"))
 ):
-    """Calculate and return the live leaderboard for a tournament."""
-    # check_permission implemented as dependency
+    """
+    Calculate and return the live leaderboard for a tournament.
+    Implementación con Caché de Intervalo (10s) para protección de base de datos.
+    """
+    # 0. Cache Check
+    cache_key = (tournament_id, current_user.tenant_id)
+    now = time.time()
     
+    if cache_key in LEADERBOARD_CACHE:
+        expiry, cached_data = LEADERBOARD_CACHE[cache_key]
+        if now < expiry:
+            return cached_data
+
     # 1. Fetch Tournament
     stmt = select(Tournament).where(
         Tournament.id == tournament_id,
@@ -179,11 +196,16 @@ async def get_leaderboard(
         else:
             entry.rank = 999 # Disqualified at bottom
 
-    return LeaderboardResponse(
+    response_data = LeaderboardResponse(
         tournament_id=tournament.id,
         tournament_name=tournament.name,
         entries=entries
     )
+
+    # 6. Update Cache
+    LEADERBOARD_CACHE[cache_key] = (now + CACHE_TTL, response_data)
+
+    return response_data
 
 @router.post("/{tournament_id}/disqualify/{user_id}")
 async def disqualify_agent(

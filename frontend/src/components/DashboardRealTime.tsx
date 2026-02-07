@@ -27,8 +27,6 @@ import LoadingState from '@/components/ui/LoadingState';
 import { CommissionAssistant } from './analytics/CommissionAssistant';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CurrencyDollarIcon } from '@heroicons/react/24/solid';
-import { Trophy } from 'lucide-react';
-import { TournamentRaceTrack } from './tournaments/TournamentRaceTrack';
 
 export default function DashboardRealTime() {
     const { toast } = useToast();
@@ -39,8 +37,6 @@ export default function DashboardRealTime() {
     const [totalRecords, setTotalRecords] = useState(0);
     const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [isCommissionOpen, setIsCommissionOpen] = useState(false);
-    const [showRaceTrack, setShowRaceTrack] = useState(false);
-    const [tournamentsData, setTournamentsData] = useState<any[]>([]);
 
     // Pagination states
     const [pageIndex, setPageIndex] = useState(0);
@@ -155,32 +151,6 @@ export default function DashboardRealTime() {
         }
     };
 
-    const loadTournaments = async () => {
-        if (!can?.('tournaments', 'tournaments', 'view_race_track')) return;
-
-        try {
-            const tourns = await fetchFromAPI("/api/v1/tournaments/");
-            if (tourns && Array.isArray(tourns)) {
-                // Limit to top 5 active/current tournaments
-                const activeList = tourns.slice(0, 5);
-                const dataWithLB = await Promise.all(activeList.map(async (t: any) => {
-                    try {
-                        const lb = await fetchFromAPI(`/api/v1/tournaments/${t.id}/leaderboard`);
-                        return {
-                            tournament: t,
-                            leaderboard: lb?.entries || []
-                        };
-                    } catch (lbErr) {
-                        return { tournament: t, leaderboard: [] };
-                    }
-                }));
-                setTournamentsData(dataWithLB);
-            }
-        } catch (tErr) {
-            console.error("Error loading tournament data for dashboard:", tErr);
-        }
-    };
-
     const { user } = useAuth();
     const { can, isLoading: permsLoading } = usePermission();
 
@@ -195,11 +165,9 @@ export default function DashboardRealTime() {
         }
 
         loadData();
-        loadTournaments(); // Non-blocking load
 
         const handleRefresh = () => {
             loadData();
-            loadTournaments();
         };
         window.addEventListener('refresh-sales', handleRefresh);
         return () => window.removeEventListener('refresh-sales', handleRefresh);
@@ -411,24 +379,6 @@ export default function DashboardRealTime() {
                 </div>
             </header>
 
-            {/* Dashboard Controls (Race Track Toggle) */}
-            {can('tournaments', 'tournaments', 'view_race_track') && (
-                <div className="flex justify-end">
-                    <button
-                        onClick={() => setShowRaceTrack(!showRaceTrack)}
-                        className={`
-                            px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 shadow-lg active:scale-95 border-2
-                            ${showRaceTrack
-                                ? 'bg-amber-500 text-white border-amber-600 shadow-amber-500/20'
-                                : 'bg-white dark:bg-slate-900 text-amber-600 dark:text-amber-500 border-amber-500/30 hover:bg-amber-50 dark:hover:bg-amber-900/10'}
-                        `}
-                    >
-                        <Trophy className={`w-4 h-4 ${showRaceTrack ? 'animate-bounce' : ''}`} />
-                        {showRaceTrack ? 'Ocultar Carrera' : '🏆 Ver Carrera'}
-                    </button>
-                </div>
-            )}
-
             {/* Content Toolbar - Consistent with other modules */}
             <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4 shadow-sm">
                 <div className="flex items-center gap-4">
@@ -527,21 +477,8 @@ export default function DashboardRealTime() {
                 ))}
             </div>
 
-            {/* Dashboard Content: Horizontal Race Track + Full Width Table */}
+            {/* Dashboard Content: Full Width Table */}
             <div className="space-y-6">
-                {/* Race Track Section (Multi-Tournament) */}
-                {can?.('tournaments', 'tournaments', 'view_race_track') && showRaceTrack && tournamentsData.length > 0 && (
-                    <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
-                        {tournamentsData.map((tData) => (
-                            <TournamentRaceTrack
-                                key={tData.tournament.id}
-                                tournamentName={tData.tournament.name}
-                                participants={tData.leaderboard}
-                                targetPoints={tData.tournament.target_points}
-                            />
-                        ))}
-                    </div>
-                )}
 
                 {/* Main Operations Panel (Full 12 columns) */}
                 <div className="space-y-4">
