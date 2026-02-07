@@ -125,29 +125,39 @@ export default function OrganizationsPage() {
         });
     };
 
-    const handleDelete = (id: string, name: string) => {
+    const handleDelete = (id: string, name: string, permanent: boolean = false) => {
+        const title = permanent ? "⚠️ ELIMINAR DEFINITIVAMENTE" : "¿Eliminar Tenante?";
+        const description = permanent
+            ? `Esta acción purgará la organización "${name}" físicamente de la base de datos. ESTO NO SE PUEDE DESHACER.`
+            : `Se moverá la organización "${name}" a la papelera. Podrás restaurarla después.`;
+
         toast({
-            title: "¿Eliminar Tenante?",
-            description: `Se eliminará permanentemente la organización "${name}" y todos sus datos asociados.`,
+            title,
+            description,
             variant: "destructive",
             duration: Infinity,
             action: (
                 <ToastAction
                     altText="ELIMINAR"
+                    className={permanent ? "bg-red-600 text-white hover:bg-red-700 border-none" : ""}
                     onClick={async () => {
                         setActionLoading(true);
                         try {
-                            await fetchFromAPI(`/api/v1/organizations/${id}`, { method: 'DELETE' });
-                            toast({ title: "Tenante Eliminado", description: "La organización ya no existe en el sistema." });
+                            const url = `/api/v1/organizations/${id}${permanent ? '?force=true' : ''}`;
+                            await fetchFromAPI(url, { method: 'DELETE' });
+                            toast({
+                                title: permanent ? "Organización Purgada" : "Tenante Eliminado",
+                                description: permanent ? "Los datos físicos han sido removidos." : "La organización ha sido movida a la papelera."
+                            });
                             fetchOrgs();
                         } catch (err: any) {
                             toast({ title: "Error", description: err.message, variant: "destructive" });
                         } finally {
-                            setActionLoading(false);
+                            setActionLoading(true);
                         }
                     }}
                 >
-                    ELIMINAR
+                    {permanent ? 'PURGAR' : 'ELIMINAR'}
                 </ToastAction>
             )
         });
@@ -288,6 +298,15 @@ export default function OrganizationsPage() {
                                                         title="Restaurar"
                                                     >
                                                         <ArrowPathIcon className="w-5 h-5" />
+                                                    </button>
+                                                )}
+                                                {canDelete && (
+                                                    <button
+                                                        onClick={() => handleDelete(org.id, org.name, true)}
+                                                        className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all"
+                                                        title="Eliminar Definitivamente"
+                                                    >
+                                                        <TrashIcon className="w-5 h-5" />
                                                     </button>
                                                 )}
                                             </>

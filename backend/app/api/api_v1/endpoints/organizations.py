@@ -142,7 +142,8 @@ async def delete_organization(
     org_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: UserProfile = Depends(get_current_user),
-    _: bool = Depends(check_permission("tenants", "view_tab", module="config"))
+    _: bool = Depends(check_permission("tenants", "view_tab", module="config")),
+    force: bool = False
 ):
     """Elimina organización vía SQL Directo"""
     try:
@@ -160,10 +161,14 @@ async def delete_organization(
         if not org:
              raise HTTPException(status_code=404, detail="Organization not found")
              
-        org.is_deleted = True
-        
-        await db.commit()
-        return {"status": "success", "message": "Organization soft-deleted"}
+        if force:
+            await db.delete(org)
+            await db.commit()
+            return {"status": "success", "message": "Organization permanently deleted"}
+        else:
+            org.is_deleted = True
+            await db.commit()
+            return {"status": "success", "message": "Organization soft-deleted"}
     except HTTPException: raise
     except Exception as e:
         await db.rollback()

@@ -55,7 +55,7 @@ export default function AdminUsersTable() {
     const [error, setError] = useState<string | null>(null);
     const [emailError, setEmailError] = useState<string | null>(null); // New state for email specific error
     const [tenantId, setTenantId] = useState<string | null>(null);
-    const canChangeRole = can('config_users', 'users', 'update') || can('policies', 'policies', 'update');
+    const canChangeRole = can('system', 'users', 'update') || can('policies', 'policies', 'update');
     const [allProducts, setAllProducts] = useState<any[]>([]);
     const [supervisors, setSupervisors] = useState<any[]>([]);
     const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -454,7 +454,7 @@ export default function AdminUsersTable() {
 
                                 return (
                                     <>
-                                        {can('config_users', 'users', 'update') && canEditUser && (
+                                        {can('system', 'users', 'update') && canEditUser && (
                                             <button
                                                 title="Editar Usuario"
                                                 className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
@@ -465,7 +465,7 @@ export default function AdminUsersTable() {
                                                 </svg>
                                             </button>
                                         )}
-                                        {can('config_users', 'config_users', 'manage') && canEditUser && (
+                                        {can('system', 'users', 'manage') && canEditUser && (
                                             <button
                                                 title="Cambiar Contraseña"
                                                 className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
@@ -479,7 +479,7 @@ export default function AdminUsersTable() {
                                                 <KeyIcon className="w-5 h-5" />
                                             </button>
                                         )}
-                                        {can('config_users', 'config_users', 'manage') && canEditUser && (
+                                        {can('system', 'users', 'manage') && canEditUser && (
                                             <button
                                                 title={info.row.original.is_active ? 'Bloquear Usuario' : 'Desbloquear Usuario'}
                                                 className={`p-1.5 rounded transition-all ${info.row.original.is_active ? 'text-gray-400 hover:text-orange-600 hover:bg-orange-50' : 'text-orange-600 hover:bg-orange-100'}`}
@@ -488,7 +488,7 @@ export default function AdminUsersTable() {
                                                 {info.row.original.is_active ? <LockClosedIcon className="w-5 h-5" /> : <LockOpenIcon className="w-5 h-5" />}
                                             </button>
                                         )}
-                                        {can('config_users', 'users', 'delete') && canEditUser && (
+                                        {can('system', 'users', 'delete') && canEditUser && (
                                             <button
                                                 title="Mover a Eliminados"
                                                 className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
@@ -503,7 +503,7 @@ export default function AdminUsersTable() {
                         </>
                     ) : (
                         <>
-                            {can('config_users', 'config_users', 'manage') && (
+                            {can('system', 'users', 'manage') && (
                                 <button
                                     title="Reactivar Usuario"
                                     className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-all"
@@ -512,7 +512,7 @@ export default function AdminUsersTable() {
                                     <ArrowPathIcon className="w-5 h-5" />
                                 </button>
                             )}
-                            {can('config_users', 'users', 'update') && (
+                            {can('system', 'users', 'update') && (
                                 <button
                                     title="Eliminar Permanentemente"
                                     className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-all"
@@ -557,7 +557,7 @@ export default function AdminUsersTable() {
                     </h2>
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mt-1">Gestión Centralizada de Identidades y Roles</p>
                 </div>
-                {can('config_users', 'users', 'create') && (
+                {can('system', 'users', 'create') && (
                     <button
                         onClick={handleOpenCreateModal}
                         className="bg-blue-800 hover:bg-blue-900 text-white px-4 h-9 rounded-sm text-[11px] font-bold uppercase tracking-widest shadow-sm transition-all flex items-center gap-2"

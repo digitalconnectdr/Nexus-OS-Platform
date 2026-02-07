@@ -7,7 +7,11 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.core.permissions_catalog import MASTER_CATALOG, ROLES
 
-# Exclude list
+# Rules for final polish:
+# 1. Purge redundant dashboard/system deletions for catalogs (already done, but let's be explicit).
+# 2. Align system:users actions for the Admin Table.
+# 3. Align config_hub:users actions for the Operatividad Table.
+
 EXCLUDE = [
     ('dashboard', 'campaigns', 'delete'),
     ('dashboard', 'goals', 'delete'),
@@ -17,17 +21,35 @@ EXCLUDE = [
     ('system', 'campaigns', 'write'),
 ]
 
-# Note: system:users:delete is kept as per user request to not touch personnel management.
+# Mandatory system:users alignment
+MANDATORY = [
+    ('system', 'users', 'create', 'Crear Usuarios'),
+    ('system', 'users', 'read', 'Ver Usuarios'),
+    ('system', 'users', 'update', 'Editar Usuarios'),
+    ('system', 'users', 'delete', 'Eliminar Usuarios'),
+    ('system', 'users', 'manage', 'Gestionar Seguridad Usuarios'),
+    ('system', 'users', 'export', 'Exportar Usuarios'),
+    
+    ('config_hub', 'users', 'update', 'Editar Operatividad'),
+    ('config_hub', 'users', 'read', 'Ver Operatividad'),
+]
 
 cleaned_catalog = []
 unique_keys = set()
 
+# First pass: Mandatory
+for mod, res, act, name in MANDATORY:
+    key = (mod, res, act)
+    cleaned_catalog.append((mod, res, act, name))
+    unique_keys.add(key)
+
+# Second pass: Catalog (skipping excluded and duplicates of mandatory)
 for mod, res, act, name in MASTER_CATALOG:
     # Skip excluded
     if (mod, res, act) in EXCLUDE:
         continue
     
-    # Skip reservations (we will re-add them to reach 99)
+    # Skip reservations
     if mod == 'system_reserved':
         continue
         
@@ -58,4 +80,4 @@ with open(output_path, 'w', encoding='utf-8') as f:
     f.write(f"]\n\n")
     f.write(f"DEFAULT_MAPPING = {{}}\n")
 
-print(f"DNA Cleanup complete. {len(cleaned_catalog)} permissions saved.")
+print(f"DNA Polishing complete. {len(cleaned_catalog)} permissions saved with aligned user actions.")
