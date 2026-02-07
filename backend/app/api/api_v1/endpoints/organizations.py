@@ -26,12 +26,11 @@ async def list_organizations(
         stmt = stmt.where(Organization.id == current_user.tenant_id)
         stmt = stmt.where(Organization.is_deleted == False)
     else:
-        # Super Admin: Return everything except based on explicit trash filter
+        # Super Admin: Filter based on trashed toggle
         if trashed:
             stmt = stmt.where(Organization.is_deleted == True)
-        # No else needed: Super Admin sees all active orgs by default if trashed=False
-        # If they want EVERYTHING, they call GET /?trashed=all (logic below)
-        pass # Returning all active orgs by default is what standard super_admin wants
+        else:
+            stmt = stmt.where(Organization.is_deleted == False)
         
     result = await db.execute(stmt.order_by(Organization.created_at.desc()))
     return result.scalars().all()

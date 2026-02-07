@@ -41,24 +41,27 @@ interface PermissionEntry {
 
 const MODULE_CONFIG: Record<string, { label: string, icon: any, color: string }> = {
     'dashboard': { label: 'Dashboard Real Time', icon: PresentationChartLineIcon, color: 'text-blue-600' },
-    'history': { label: 'Historial Ventas', icon: CircleStackIcon, color: 'text-indigo-600' },
+    'history': { label: 'Historial de Ventas', icon: CircleStackIcon, color: 'text-indigo-600' },
     'performance': { label: 'Gestión del Desempeño', icon: BriefcaseIcon, color: 'text-emerald-600' },
     'finance': { label: 'Gestión Financiera', icon: CurrencyDollarIcon, color: 'text-orange-600' },
-    'users': { label: 'Gestión de Usuarios', icon: UserGroupIcon, color: 'text-sky-600' },
-    'config_campaigns': { label: 'Catálogo: Campañas', icon: Bars3Icon, color: 'text-purple-600' },
-    'config_products': { label: 'Catálogo: Productos', icon: TagIcon, color: 'text-pink-600' },
-    'config_goals': { label: 'Catálogo: Objetivos', icon: TagIcon, color: 'text-rose-600' },
-    'config_statuses': { label: 'Catálogo: Estatus', icon: AdjustmentsHorizontalIcon, color: 'text-slate-600' },
-    'config_users': { label: 'Usuarios (Config)', icon: UserGroupIcon, color: 'text-sky-600' },
-    'config_policies': { label: 'Políticas de Rol', icon: KeyIcon, color: 'text-gray-600' },
-    'users_manager': { label: 'Gestión Usuarios', icon: UserGroupIcon, color: 'text-blue-800' },
-    'permissions': { label: 'Matriz Permisos', icon: ShieldCheckIcon, color: 'text-indigo-600' },
-    'config': { label: 'Configuración Sistema', icon: Cog6ToothIcon, color: 'text-slate-600' },
-    'tournaments': { label: 'Torneos y Competencias', icon: Trophy, color: 'text-yellow-600' },
-    'ops': { label: 'Estado del Sistema', icon: CpuChipIcon, color: 'text-rose-600' },
+    'config_hub': { label: 'Configuración de Catálogos', icon: Cog6ToothIcon, color: 'text-purple-600' },
     'system': { label: 'Núcleo del Sistema', icon: ShieldCheckIcon, color: 'text-gray-600' },
+    'tournaments': { label: 'Torneos y Competencias', icon: Trophy, color: 'text-yellow-600' },
+    'dev_modules': { label: 'Módulos en Desarrollo', icon: CpuChipIcon, color: 'text-rose-600' },
     'system_reserved': { label: 'SISTEMA: RESERVAS TÉCNICAS', icon: LockClosedIcon, color: 'text-slate-400' },
 };
+
+const MODULE_ORDER = [
+    'dashboard',
+    'history',
+    'performance',
+    'finance',
+    'config_hub',
+    'system',
+    'tournaments',
+    'dev_modules',
+    'system_reserved'
+];
 
 export default function PermissionsPage() {
     const { user } = useAuth();
@@ -205,7 +208,10 @@ export default function PermissionsPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {Object.entries(groupedMatrix).map(([module, functionalities]) => {
+                            {MODULE_ORDER.map(module => {
+                                const functionalities = groupedMatrix[module];
+                                if (!functionalities) return null;
+
                                 const modConfig = MODULE_CONFIG[module] || { label: module, icon: CubeIcon, color: 'text-gray-400' };
                                 const isCollapsed = collapsedModules[module];
                                 const funcCount = Object.keys(functionalities).length;
