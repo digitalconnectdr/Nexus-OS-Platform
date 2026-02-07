@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { fetchFromAPI } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { usePermission } from '@/hooks/usePermission';
@@ -115,6 +115,8 @@ export default function TournamentManagementPage() {
     const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
     const [isArbitrating, setIsArbitrating] = useState(false);
     const [loadingLB, setLoadingLB] = useState(false);
+    const abortControllerRef = React.useRef<AbortController | null>(null);
+    const positionsAbortControllerRef = React.useRef<AbortController | null>(null);
 
     // Form states
     const [newName, setNewName] = useState('');
@@ -132,19 +134,33 @@ export default function TournamentManagementPage() {
     useEffect(() => {
         if (activeTab === 'positions') {
             loadTournamentsData();
-            const interval = setInterval(loadTournamentsData, 30000); // 30s refresh
-            return () => clearInterval(interval);
+            const interval = setInterval(loadTournamentsData, 15000); // 15s refresh for positions
+            return () => {
+                clearInterval(interval);
+                if (positionsAbortControllerRef.current) {
+                    positionsAbortControllerRef.current.abort();
+                }
+            };
         }
     }, [activeTab]);
 
-    const loadTournamentsData = async () => {
+    const loadTournamentsData = useCallback(async () => {
         if (tournaments.length === 0) return;
+
+        if (positionsAbortControllerRef.current) {
+            positionsAbortControllerRef.current.abort();
+        }
+        const controller = new AbortController();
+        positionsAbortControllerRef.current = controller;
+
         setLoadingPositions(true);
         try {
             const activeTourns = tournaments.filter(t => t.is_active);
             const dataWithLB = await Promise.all(activeTourns.map(async (t) => {
                 try {
-                    const lb = await fetchFromAPI(`/api/v1/tournaments/${t.id}/leaderboard`);
+                    const lb = await fetchFromAPI(`/api/v1/tournaments/${t.id}/leaderboard`, {
+                        signal: controller.signal
+                    });
                     return {
                         tournament: t,
                         leaderboard: lb?.entries || []
@@ -153,15 +169,22 @@ export default function TournamentManagementPage() {
                     return { tournament: t, leaderboard: [] };
                 }
             }));
-            setTournamentsData(dataWithLB);
-        } catch (err) {
+
+            if (!controller.signal.aborted) {
+                setTournamentsData(dataWithLB);
+            }
+        } catch (err: any) {
+            if (err.name === 'AbortError') return;
             console.error("Error loading tournament positions:", err);
         } finally {
-            setLoadingPositions(false);
+            if (!controller.signal.aborted) {
+                setLoadingPositions(false);
+            }
         }
-    };
+    }, [tournaments]);
 
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
+        setLoading(true);
         try {
             const [tData, cData, uData] = await Promise.all([
                 fetchFromAPI('/api/v1/tournaments/'),
@@ -171,12 +194,12 @@ export default function TournamentManagementPage() {
             setTournaments(tData || []);
             setCampaigns(cData || []);
             setSupervisors(uData?.items || []);
-        } catch (err) {
+        } catch (err: any) {
             console.error("Error loading tournament center data:", err);
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     const loadCampaignProducts = async (campaignId: string) => {
         try {
@@ -190,26 +213,38 @@ export default function TournamentManagementPage() {
         }
     };
 
-    const loadLeaderboard = async (t: Tournament) => {
+    const loadLeaderboard = useCallback(async (t: Tournament) => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
         setLoadingLB(true);
         try {
-            const data = await fetchFromAPI(`/api/v1/tournaments/${t.id}/leaderboard`);
+            const data = await fetchFromAPI(`/api/v1/tournaments/${t.id}/leaderboard`, {
+                signal: controller.signal
+            });
             const entries = data.entries || [];
-            setLeaderboard(entries);
 
-            setSelectedTournament(t);
-            setIsArbitrating(true);
-        } catch (err) {
-            // No fallback in production if error
+            if (!controller.signal.aborted) {
+                setLeaderboard(entries);
+                setSelectedTournament(t);
+                setIsArbitrating(true);
+            }
+        } catch (err: any) {
+            if (err.name === 'AbortError') return;
             toast({
                 title: "Error",
                 description: "No se pudieron cargar los datos reales del torneo.",
                 variant: "destructive"
             });
         } finally {
-            setLoadingLB(false);
+            if (!controller.signal.aborted) {
+                setLoadingLB(false);
+            }
         }
-    };
+    }, [toast]);
 
     const handleAction = async (type: 'award' | 'disqualify', agentId: string) => {
         if (!selectedTournament) return;

@@ -1,6 +1,7 @@
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
+import { useCallback } from 'react';
 
 /**
  * Hook to check if the current user has a specific permission.
@@ -11,7 +12,7 @@ import { useAuth } from '@/context/AuthContext';
 export function usePermission() {
     const { hasPermission, isLoading, user } = useAuth(); // Added user to check role
 
-    const can = (module: string, resource: string, action: string) => {
+    const can = useCallback((module: string, resource: string, action: string) => {
         // 1. Super Admin Bypass (Already in hasPermission, but double-checked here if desired, 
         // implies we trust hasPermission for the raw check)
 
@@ -29,7 +30,7 @@ export function usePermission() {
         }
 
         return false;
-    };
+    }, [hasPermission]);
 
     return {
         can,

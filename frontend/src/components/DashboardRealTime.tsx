@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { fetchFromAPI } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { usePermission } from '@/hooks/usePermission';
@@ -74,7 +74,18 @@ export default function DashboardRealTime() {
         }
     }, [activeFilters]);
 
-    const loadData = async () => {
+    const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+    const abortControllerRef = useRef<AbortController | null>(null);
+
+    const loadData = useCallback(async (isManual = false) => {
+        // Cancel pending request if any
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
         setLoading(true);
         try {
             const params = new URLSearchParams({
@@ -83,14 +94,19 @@ export default function DashboardRealTime() {
                 size: pageSize.toString()
             });
 
+            const signal = controller.signal;
+
             const requests = [
-                fetchFromAPI(`/api/v1/sales/?${params.toString()}`),
-                fetchFromAPI("/api/v1/selectors/statuses"),
-                fetchFromAPI("/api/v1/selectors/campaigns"),
-                fetchFromAPI("/api/v1/selectors/supervisors"),
+                fetchFromAPI(`/api/v1/sales/?${params.toString()}`, { signal }),
+                fetchFromAPI("/api/v1/selectors/statuses", { signal }),
+                fetchFromAPI("/api/v1/selectors/campaigns", { signal }),
+                fetchFromAPI("/api/v1/selectors/supervisors", { signal }),
             ];
 
             const results = await Promise.allSettled(requests);
+
+            // If signal was aborted, don't update state
+            if (signal.aborted) return;
 
             const salesData = results[0].status === 'fulfilled' ? results[0].value : null;
             const statusesData = results[1].status === 'fulfilled' ? results[1].value : null;
@@ -143,13 +159,22 @@ export default function DashboardRealTime() {
             setStatuses(safeStatuses);
             setCampaigns(safeCampaigns);
             setSupervisors(supervisorsData?.items || (Array.isArray(supervisorsData) ? supervisorsData : []));
+            setLastUpdated(new Date());
 
-        } catch (err) {
+            if (isManual) {
+                toast({
+                    title: "Datos Actulizados",
+                    description: "El dashboard ha sido sincronizado con éxito.",
+                });
+            }
+
+        } catch (err: any) {
+            if (err.name === 'AbortError') return;
             console.error("Error loading dashboard data:", err);
         } finally {
             setLoading(false);
         }
-    };
+    }, [pageIndex, pageSize, toast]);
 
     const { user } = useAuth();
     const { can, isLoading: permsLoading } = usePermission();
@@ -157,21 +182,34 @@ export default function DashboardRealTime() {
     useEffect(() => {
         if (permsLoading) return;
 
-        // --- CONDITIONAL FETCHING ---
-        // Access restricted by functional matrix
-        if (!can?.('dashboard', 'dashboard', 'access')) {
+        // --- STABLE ACCESS CHECK ---
+        const hasAccess = can('dashboard', 'dashboard', 'access');
+        if (!hasAccess) {
             setLoading(false);
             return;
         }
 
+        // Initial load
         loadData();
 
-        const handleRefresh = () => {
+        // 30s Smart Polling
+        const interval = setInterval(() => {
             loadData();
+        }, 30000);
+
+        const handleRefresh = () => {
+            loadData(true);
         };
         window.addEventListener('refresh-sales', handleRefresh);
-        return () => window.removeEventListener('refresh-sales', handleRefresh);
-    }, [pageIndex, pageSize, permsLoading, can]);
+
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('refresh-sales', handleRefresh);
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+        };
+    }, [loadData, permsLoading, can]);
 
     // --- GRACEFUL FALLBACK ---
     if (!permsLoading && !can?.('dashboard', 'dashboard', 'access')) {
@@ -202,21 +240,6 @@ export default function DashboardRealTime() {
             });
 
             if (res.status === 'success') {
-                const updatedStatusId = value;
-                const statusObj = statuses.find(s => s.id === updatedStatusId);
-
-                // If it's a status update, check if it's still "active work"
-                // Assuming statusObj has the is_active_work property, but we might not have it in options
-                // Let's rely on the backend result or just force a reload if it's a status change
-                if (field === "status_id") {
-                    // Logic: If we changed status, it's safer to check the scope
-                    const statusObj = statuses.find(s => s.id === value);
-                    if (statusObj && statusObj.scope === 'ARCHIVE') {
-                        setSales(prev => prev.filter(s => s.id !== id));
-                        return;
-                    }
-                }
-
                 setSales(prev => prev.map(s => {
                     if (s.id === id) {
                         const updated = {
@@ -230,7 +253,6 @@ export default function DashboardRealTime() {
                             updated.status = res.status_name;
                         }
 
-                        // Sync display name for campaign if ID was updated
                         if (field === "campaign_id") {
                             const campaign = campaigns.find(c => c.id === value);
                             if (campaign) updated.campaign = campaign.name;
@@ -242,7 +264,7 @@ export default function DashboardRealTime() {
                 }));
             }
         } catch (err: any) {
-            console.error("Payload attempt:", { id, field, value, auditor: user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : "Sistema" });
+            console.error("Payload attempt:", { id, field, value });
             setSales(oldSales);
             toast({
                 title: "Error de Actualización",
@@ -277,19 +299,6 @@ export default function DashboardRealTime() {
         });
     };
 
-    // Extract unique values for filters
-    const uniqueAgents = useMemo(() => extractUniqueAgents(sales), [sales]);
-    const uniqueProducts = useMemo(() => extractUniqueProducts(sales), [sales]);
-
-    // Apply filters
-    const filteredSales = useMemo(() => {
-        return applyFilters(sales, activeFilters);
-    }, [sales, activeFilters]);
-
-    // --- DYNAMIC ANALYTICS ---
-    const totalRevenue = filteredSales.reduce((acc, s) => acc + (Number(s.price) || 0), 0);
-
-    // Handler for filter changes
     const handleFilterChange = (filters: FilterCriteria) => {
         setActiveFilters(filters);
     };
@@ -298,14 +307,19 @@ export default function DashboardRealTime() {
         setActiveFilters({});
     };
 
-    // Count active filters
     const activeFilterCount = Object.keys(activeFilters).filter(key => {
         const value = activeFilters[key as keyof FilterCriteria];
         if (Array.isArray(value)) return value.length > 0;
         return value !== undefined && value !== '';
     }).length;
 
-    // Status-based counts + Total Productive
+    const uniqueAgents = useMemo(() => extractUniqueAgents(sales), [sales]);
+    const uniqueProducts = useMemo(() => extractUniqueProducts(sales), [sales]);
+
+    const filteredSales = useMemo(() => {
+        return applyFilters(sales, activeFilters);
+    }, [sales, activeFilters]);
+
     const statusStats = useMemo(() => {
         const stats = statuses.map(status => {
             const count = filteredSales.filter(s =>
@@ -314,7 +328,6 @@ export default function DashboardRealTime() {
             return { ...status, count };
         });
 
-        // Add a "Total" summary if there are productive sales
         const productiveStatuses = statuses.filter(s => s.is_productive).map(s => s.name.toUpperCase());
         const totalProductive = filteredSales.filter(s =>
             productiveStatuses.includes(String(s.status || "").toUpperCase())
@@ -379,7 +392,6 @@ export default function DashboardRealTime() {
                 </div>
             </header>
 
-            {/* Content Toolbar - Consistent with other modules */}
             <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4 shadow-sm">
                 <div className="flex items-center gap-4">
                     {can('dashboard', 'dashboard', 'access') && (
@@ -399,22 +411,25 @@ export default function DashboardRealTime() {
                     )}
                     <div className="h-6 w-px bg-slate-200 dark:bg-slate-800" />
                     <button
-                        onClick={loadData}
+                        onClick={() => loadData(true)}
                         className="p-2 text-slate-400 hover:text-blue-600 transition-all active:scale-95"
                         title="Recargar Datos"
                     >
                         <ArrowPathIcon className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col items-end">
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                         Operaciones en Tiempo Real Nexus
                     </span>
+                    {lastUpdated && (
+                        <span className="text-[9px] font-black text-blue-500 uppercase tracking-tighter">
+                            Última actualización: {lastUpdated.toLocaleTimeString()}
+                        </span>
+                    )}
                 </div>
             </div>
 
-
-            {/* ADVANCED FILTERS SECTION */}
             {showFilters && can('dashboard', 'dashboard', 'access') && (
                 <AdvancedFilters
                     statuses={statuses}
@@ -427,7 +442,6 @@ export default function DashboardRealTime() {
                 />
             )}
 
-            {/* ACTIVE FILTERS INDICATOR */}
             {activeFilterCount > 0 && can('dashboard', 'dashboard', 'access') && (
                 <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 flex items-center justify-between shadow-sm">
                     <div className="flex items-center gap-3 flex-wrap">
@@ -453,7 +467,6 @@ export default function DashboardRealTime() {
                 </div>
             )}
 
-            {/* KPI CARDS SECTION */}
             <div className="flex flex-wrap gap-3">
                 {statusStats.map(stat => (
                     <div
@@ -477,10 +490,7 @@ export default function DashboardRealTime() {
                 ))}
             </div>
 
-            {/* Dashboard Content: Full Width Table */}
             <div className="space-y-6">
-
-                {/* Main Operations Panel (Full 12 columns) */}
                 <div className="space-y-4">
                     <div className="flex items-center gap-2">
                         <ChartBarIcon className="w-5 h-5 text-[#072D44] dark:text-slate-100" />
@@ -496,9 +506,8 @@ export default function DashboardRealTime() {
                 </div>
             </div>
 
-            {/* COMMISSION BOOSTER MODAL (CENTERED & COMPACT) */}
             <Dialog open={isCommissionOpen} onOpenChange={setIsCommissionOpen}>
-                <DialogContent className="max-w-4xl p-0 bg-white border-0 shadow-2xl rounded-3xl overflow-hidden max-h-[90vh] flex flex-col text-white">
+                <DialogContent className="max-w-4xl p-0 bg-white border-0 shadow-2xl rounded-3xl overflow-hidden max-h-[90vh] flex flex-col">
                     <div className="bg-[#072D44] px-6 py-4 text-white flex justify-between items-center">
                         <DialogHeader className="space-y-0 text-left">
                             <DialogTitle className="text-lg font-black tracking-tighter flex items-center gap-3 text-white uppercase">
@@ -515,7 +524,6 @@ export default function DashboardRealTime() {
                 </DialogContent>
             </Dialog>
 
-            {/* CONTROLES DE PAGINACIÓN PREMIUM (ESTILO SALES HISTORY) */}
             <div className="flex flex-col md:flex-row items-center justify-between gap-6 px-6 py-6 bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm transition-colors">
                 <div className="flex items-center gap-6">
                     <div className="flex items-center gap-3">
@@ -524,7 +532,7 @@ export default function DashboardRealTime() {
                             value={pageSize}
                             onChange={e => {
                                 setPageSize(Number(e.target.value));
-                                setPageIndex(0); // Reset a primera página al cambiar tamaño
+                                setPageIndex(0);
                             }}
                             className="bg-gray-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-[11px] font-black text-blue-700 dark:text-blue-400 outline-none focus:border-blue-500 transition-all cursor-pointer shadow-sm appearance-none min-w-[60px] text-center"
                         >

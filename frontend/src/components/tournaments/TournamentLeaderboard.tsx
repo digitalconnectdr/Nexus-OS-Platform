@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { fetchFromAPI } from '@/lib/api';
 import { usePermission } from '@/hooks/usePermission';
 import {
@@ -45,7 +45,9 @@ export const TournamentLeaderboard = () => {
 
     const canManageTournaments = can?.('tournaments', 'tournaments', 'manage');
 
-    const loadTournaments = async () => {
+    const abortControllerRef = React.useRef<AbortController | null>(null);
+
+    const loadTournaments = useCallback(async () => {
         try {
             const list = await fetchFromAPI('/api/v1/tournaments/');
             if (list && list.length > 0) {
@@ -57,20 +59,30 @@ export const TournamentLeaderboard = () => {
             console.error("Error loading tournaments:", error);
             setLoading(false);
         }
-    };
+    }, []);
 
-    const loadLeaderboard = async () => {
+    const loadLeaderboard = useCallback(async () => {
         if (!activeTournamentId) return;
-        setLoading(true);
+
+        // Cancel pending
+        if (abortControllerRef.current) abortControllerRef.current.abort();
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+
         try {
-            const lb = await fetchFromAPI(`/api/v1/tournaments/${activeTournamentId}/leaderboard`);
+            const lb = await fetchFromAPI(`/api/v1/tournaments/${activeTournamentId}/leaderboard`, {
+                signal: controller.signal
+            });
             setData(lb);
-        } catch (error) {
+        } catch (error: any) {
+            if (error.name === 'AbortError') return;
             console.error("Error loading leaderboard:", error);
         } finally {
-            setLoading(false);
+            if (!controller.signal.aborted) {
+                setLoading(false);
+            }
         }
-    };
+    }, [activeTournamentId]);
 
     const handleDisqualify = async (userId: string, name: string) => {
         const reason = window.prompt(`Razón de descalificación para ${name}:`);
@@ -97,13 +109,25 @@ export const TournamentLeaderboard = () => {
 
     useEffect(() => {
         loadTournaments();
-    }, []);
+    }, [loadTournaments]);
 
     useEffect(() => {
-        if (activeTournamentId) {
+        if (!activeTournamentId) return;
+
+        loadLeaderboard();
+
+        // 15s Smart Polling for Leaderboard
+        const interval = setInterval(() => {
             loadLeaderboard();
-        }
-    }, [activeTournamentId]);
+        }, 15000);
+
+        return () => {
+            clearInterval(interval);
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+        };
+    }, [activeTournamentId, loadLeaderboard]);
 
     if (!user || permsLoading) return null;
     if (!activeTournamentId && !loading) return null;

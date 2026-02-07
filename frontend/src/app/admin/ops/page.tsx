@@ -79,12 +79,6 @@ export default function OpsDashboard() {
     useEffect(() => {
         fetchTelemetry();
         fetchBackups();
-        const intervalTele = setInterval(fetchTelemetry, 5000);
-        const intervalBackups = setInterval(fetchBackups, 10000);
-        return () => {
-            clearInterval(intervalTele);
-            clearInterval(intervalBackups);
-        };
     }, [fetchTelemetry, fetchBackups]);
 
     const handlePurge = async () => {
