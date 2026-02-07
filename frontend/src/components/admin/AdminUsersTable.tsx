@@ -24,6 +24,20 @@ import { useAuth } from '@/context/AuthContext';
 
 import { Tooltip } from '@/components/ui/tooltip';
 
+const ROLE_LEVELS: Record<string, number> = {
+    'Super Admin': 100,
+    'Administrador': 90,
+    'Cliente': 85,
+    'Gerente': 80,
+    'Supervisor Senior': 70,
+    'Supervisor': 60,
+    'Dpto Estadistica': 50,
+    'Auditor Calidad': 50,
+    'Seguimiento': 40,
+    'Digitación': 30,
+    'Representante': 10,
+};
+
 const InfoTooltip = ({ text }: { text: string }) => (
     <Tooltip content={text}>
         <InformationCircleIcon className="w-3.5 h-3.5 text-blue-400 cursor-help hover:text-blue-600 transition-colors ml-1.5" />
@@ -432,49 +446,60 @@ export default function AdminUsersTable() {
                 <div className="flex justify-end gap-2">
                     {!info.row.original.is_deleted ? (
                         <>
-                            {can('config_users', 'users', 'update') && (
-                                <button
-                                    title="Editar Usuario"
-                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
-                                    onClick={() => handleEditClick(info.row.original)}
-                                >
-                                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                    </svg>
-                                </button>
-                            )}
-                            {can('config_users', 'config_users', 'manage') && (
-                                <button
-                                    title="Cambiar Contraseña"
-                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
-                                    onClick={() => {
-                                        setSelectedUserForReset(info.row.original);
-                                        setPwdData({ password: '', confirm_password: '' });
-                                        setPwdError(null);
-                                        setIsPasswordModalOpen(true);
-                                    }}
-                                >
-                                    <KeyIcon className="w-5 h-5" />
-                                </button>
-                            )}
-                            {can('config_users', 'config_users', 'manage') && (
-                                <button
-                                    title={info.row.original.is_active ? 'Bloquear Usuario' : 'Desbloquear Usuario'}
-                                    className={`p-1.5 rounded transition-all ${info.row.original.is_active ? 'text-gray-400 hover:text-orange-600 hover:bg-orange-50' : 'text-orange-600 hover:bg-orange-100'}`}
-                                    onClick={() => handleToggleStatus(info.row.original)}
-                                >
-                                    {info.row.original.is_active ? <LockClosedIcon className="w-5 h-5" /> : <LockOpenIcon className="w-5 h-5" />}
-                                </button>
-                            )}
-                            {can('config_users', 'users', 'delete') && (
-                                <button
-                                    title="Mover a Eliminados"
-                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
-                                    onClick={() => handleDelete(info.row.original)}
-                                >
-                                    <TrashIcon className="w-5 h-5" />
-                                </button>
-                            )}
+                            {(() => {
+                                const targetLevel = ROLE_LEVELS[info.row.original.role] || 0;
+                                const myLevel = ROLE_LEVELS[user?.role || ''] || 0;
+                                const isSuperAdmin = user?.role === 'Super Admin' || user?.is_super_admin;
+                                const canEditUser = isSuperAdmin || (myLevel > targetLevel);
+
+                                return (
+                                    <>
+                                        {can('config_users', 'users', 'update') && canEditUser && (
+                                            <button
+                                                title="Editar Usuario"
+                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                                                onClick={() => handleEditClick(info.row.original)}
+                                            >
+                                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                                </svg>
+                                            </button>
+                                        )}
+                                        {can('config_users', 'config_users', 'manage') && canEditUser && (
+                                            <button
+                                                title="Cambiar Contraseña"
+                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-all"
+                                                onClick={() => {
+                                                    setSelectedUserForReset(info.row.original);
+                                                    setPwdData({ password: '', confirm_password: '' });
+                                                    setPwdError(null);
+                                                    setIsPasswordModalOpen(true);
+                                                }}
+                                            >
+                                                <KeyIcon className="w-5 h-5" />
+                                            </button>
+                                        )}
+                                        {can('config_users', 'config_users', 'manage') && canEditUser && (
+                                            <button
+                                                title={info.row.original.is_active ? 'Bloquear Usuario' : 'Desbloquear Usuario'}
+                                                className={`p-1.5 rounded transition-all ${info.row.original.is_active ? 'text-gray-400 hover:text-orange-600 hover:bg-orange-50' : 'text-orange-600 hover:bg-orange-100'}`}
+                                                onClick={() => handleToggleStatus(info.row.original)}
+                                            >
+                                                {info.row.original.is_active ? <LockClosedIcon className="w-5 h-5" /> : <LockOpenIcon className="w-5 h-5" />}
+                                            </button>
+                                        )}
+                                        {can('config_users', 'users', 'delete') && canEditUser && (
+                                            <button
+                                                title="Mover a Eliminados"
+                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-all"
+                                                onClick={() => handleDelete(info.row.original)}
+                                            >
+                                                <TrashIcon className="w-5 h-5" />
+                                            </button>
+                                        )}
+                                    </>
+                                );
+                            })()}
                         </>
                     ) : (
                         <>
@@ -826,19 +851,17 @@ export default function AdminUsersTable() {
                                         disabled={editingUser && !canChangeRole}
                                         className={`w-full border border-gray-300 rounded-md px-3 h-9 text-xs font-bold focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all uppercase appearance-none cursor-pointer ${editingUser && !canChangeRole ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : 'text-blue-900 bg-white shadow-sm'}`}
                                     >
-                                        {(user?.role === 'Super Admin' || user?.is_super_admin) && (
-                                            <option value="Super Admin">Super Admin</option>
-                                        )}
-                                        <option value="Administrador">Administrador</option>
-                                        <option value="Cliente">Cliente</option>
-                                        <option value="Gerente">Gerente</option>
-                                        <option value="Supervisor Senior">Supervisor Senior</option>
-                                        <option value="Supervisor">Supervisor</option>
-                                        <option value="Dpto Estadistica">Dpto Estadistica</option>
-                                        <option value="Auditor Calidad">Auditor Calidad</option>
-                                        <option value="Seguimiento">Seguimiento</option>
-                                        <option value="Digitación">Digitación</option>
-                                        <option value="Representante">Representante</option>
+                                        {Object.entries(ROLE_LEVELS).map(([roleName, level]) => {
+                                            const myLevel = ROLE_LEVELS[user?.role || ''] || 0;
+                                            const isSuperAdmin = user?.role === 'Super Admin' || user?.is_super_admin;
+
+                                            // Hierarchy rule: Can only assign roles STRICTLY LOWER than own,
+                                            // unless Super Admin.
+                                            if (isSuperAdmin || (myLevel > level)) {
+                                                return <option key={roleName} value={roleName}>{roleName}</option>;
+                                            }
+                                            return null;
+                                        })}
                                     </select>
                                 </div>
                                 <div className="col-span-12 md:col-span-4 space-y-1">

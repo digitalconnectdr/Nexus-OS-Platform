@@ -151,12 +151,14 @@ async def create_user(
     # El resto NO puede crear a alguien de nivel igual o superior.
     
     # NUEVA REGLA DE SEGURIDAD (User Request):
-    # Un Admin (o inferior) NUNCA puede crear un Super Admin.
-    if user_in.role == UserRole.SUPER_ADMIN and current_user.role != UserRole.SUPER_ADMIN:
-        raise HTTPException(
-            status_code=403, 
-            detail="Acción denegada: Tu nivel de privilegios no permite crear usuarios con el rol 'Super Admin'."
-        )
+    # El creador DEBE tener un nivel estrictamente mayor que el nuevo usuario,
+    # excepto si es Super Admin.
+    if current_user.role != UserRole.SUPER_ADMIN:
+        if new_user_role_level >= creator_level:
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Acción denegada: No puedes crear usuarios con rango '{user_in.role}' (Nivel {new_user_role_level}) porque es igual o superior a tu nivel {creator_level}."
+            )
 
     # NUEVA REGLA DE SEGURIDAD (Multi-tenant):
     # Forzar el tenant_id del creador para evitar inyección de usuarios en otras orgs.
@@ -241,11 +243,13 @@ async def update_user(
     target_user_level = get_role_level(db_user.role)
 
     if current_user.role != UserRole.SUPER_ADMIN:
+        # No puede editar a alguien de su mismo nivel o superior
         if target_user_level >= creator_level:
-             raise HTTPException(status_code=403, detail="Jerarquía insuficiente para editar este perfil.")
+             raise HTTPException(status_code=403, detail=f"Jerarquía insuficiente para editar este perfil ({db_user.role}).")
 
+        # No puede promover a alguien a su mismo nivel o superior
         if user_in.role and get_role_level(user_in.role) >= creator_level:
-            raise HTTPException(status_code=403, detail="No puedes asignar un rol igual o superior al tuyo.")
+            raise HTTPException(status_code=403, detail=f"No puedes asignar un rol ({user_in.role}) igual o superior al tuyo.")
 
     # --- ACTUALIZACIÓN ---
     update_data = user_in.model_dump(exclude_unset=True)

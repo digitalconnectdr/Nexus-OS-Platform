@@ -41,15 +41,15 @@ interface PermissionEntry {
 const ROLES_CONFIG = [
     { id: "super_admin", label: "Super Admin" },
     { id: "administrador", label: "Administrador" },
+    { id: "cliente", label: "Cliente" },
     { id: "gerente", label: "Gerente" },
     { id: "supervisor_senior", label: "Supervisor Senior" },
     { id: "supervisor", label: "Supervisor" },
-    { id: "representante", label: "Representante" },
     { id: "dpto_estadistica", label: "Dpto Estadistica" },
     { id: "seguimiento", label: "Seguimiento" },
-    { id: "auditor_calidad", label: "Auditor Calidad" },
     { id: "digitacion", label: "Digitación" },
-    { id: "cliente", label: "Cliente" }
+    { id: "auditor_calidad", label: "Auditor Calidad" },
+    { id: "representante", label: "Representante" }
 ];
 
 const MODULE_CONFIG: Record<string, { label: string, icon: any, color: string }> = {
@@ -115,7 +115,12 @@ export default function PermissionsPage() {
     }, [loadPermissions, user?.tenant]);
 
     const handleToggle = (perm: PermissionEntry, currentValue: boolean) => {
-        if (!isSuperAdmin) return;
+        // Master Security: super_admin can edit all except self.
+        // administrador cannot edit self.
+        const isSelfEdit = (user?.role?.toLowerCase() === perm.role.toLowerCase());
+        const canEdit = isSuperAdmin || (user?.role === 'administrador' && !isSelfEdit);
+
+        if (!canEdit) return;
 
         const newValue = !currentValue;
         const cellKey = `${perm.role}-${perm.resource}:${perm.action}`;
@@ -243,9 +248,19 @@ export default function PermissionsPage() {
                                                         const p = rolePerms[role.id];
                                                         const cellKey = `${role.id}-${funcKey}`;
                                                         const isUpdating = loadingStates[cellKey];
-                                                        const isDisabled = !isSuperAdmin || role.id === 'super_admin';
 
-                                                        if (!p) return <td key={role.id} className="py-2 border-r border-slate-100 bg-slate-50/10" />;
+                                                        // Security Logic:
+                                                        // 1. super_admin column always locked.
+                                                        // 2. administrador cannot edit their own role column.
+                                                        // 3. non-admin/non-superadmin locked out.
+                                                        const isTargetingSuperAdmin = role.id === 'super_admin';
+                                                        const isTargetingSelf = (user?.role?.toLowerCase() === role.id.toLowerCase());
+
+                                                        const isDisabled = isTargetingSuperAdmin ||
+                                                            (user?.role === 'administrador' && isTargetingSelf) ||
+                                                            (!isSuperAdmin && user?.role !== 'administrador');
+
+                                                        if (!p) return <td key={role.id} className="py-2 border-r border-slate-100 bg-transparent" />;
 
                                                         return (
                                                             <td key={role.id} className="py-2 border-r border-slate-100 text-center bg-transparent">
