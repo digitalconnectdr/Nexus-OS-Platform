@@ -44,7 +44,10 @@ export default function OrganizationsPage() {
         setLoading(true);
         try {
             const data = await fetchFromAPI(`/api/v1/organizations/?trashed=${showDeleted}`);
-            setOrgs(data);
+            // Robust check: even if API returns some because of partial filters 
+            // the client will only show based on toggle
+            const filteredData = data.filter((o: any) => showDeleted ? o.is_deleted : !o.is_deleted);
+            setOrgs(filteredData);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Error al cargar organizaciones');
         } finally {

@@ -57,6 +57,7 @@ const MODULE_CONFIG: Record<string, { label: string, icon: any, color: string }>
     'tournaments': { label: 'Torneos y Competencias', icon: Trophy, color: 'text-yellow-600' },
     'ops': { label: 'Estado del Sistema', icon: CpuChipIcon, color: 'text-rose-600' },
     'system': { label: 'Núcleo del Sistema', icon: ShieldCheckIcon, color: 'text-gray-600' },
+    'system_reserved': { label: 'SISTEMA: RESERVAS TÉCNICAS', icon: LockClosedIcon, color: 'text-slate-400' },
 };
 
 export default function PermissionsPage() {
@@ -233,7 +234,9 @@ export default function PermissionsPage() {
                                             return (
                                                 <tr key={funcKey} className={`group hover:bg-slate-50/50 transition-colors ${fIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50/20'}`}>
                                                     <td className="py-2 pl-4 border-r border-slate-100 sticky left-0 z-20 bg-white group-hover:bg-slate-50 transition-colors shadow-[4px_0_12px_rgba(0,0,0,0.05)] max-w-[350px]">
-                                                        <span className="text-sm font-medium text-slate-700 tracking-tight whitespace-normal break-words block">{label}</span>
+                                                        <span className={`text-sm font-medium tracking-tight whitespace-normal break-words block ${module === 'system_reserved' ? 'text-slate-400 italic' : 'text-slate-700'}`}>
+                                                            {label}
+                                                        </span>
                                                     </td>
                                                     {ROLES_CONFIG.map(role => {
                                                         const p = rolePerms[role.id];
@@ -250,7 +253,7 @@ export default function PermissionsPage() {
                                                                         <Switch
                                                                             checked={p?.is_allowed || false}
                                                                             onCheckedChange={() => p && handleToggle(p, p.is_allowed)}
-                                                                            disabled={isDisabled || isUpdating || !p}
+                                                                            disabled={isDisabled || isUpdating || !p || module === 'system_reserved'}
                                                                         />
                                                                         {isUpdating && (
                                                                             <div className="absolute inset-0 flex items-center justify-center bg-white/40 rounded-full">
