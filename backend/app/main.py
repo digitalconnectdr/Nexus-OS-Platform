@@ -104,7 +104,8 @@ try:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["*"]
+        expose_headers=["*"],
+        max_age=3600
     )
 except Exception as e:
     logger.error(f"❌ CORS Setup Failed: {e}")
@@ -115,6 +116,7 @@ except Exception as e:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        max_age=3600
     )
 
 

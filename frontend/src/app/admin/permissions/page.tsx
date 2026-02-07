@@ -250,15 +250,16 @@ export default function PermissionsPage() {
                                                         const isUpdating = loadingStates[cellKey];
 
                                                         // Security Logic:
-                                                        // 1. super_admin column always locked.
+                                                        // 1. super_admin can edit all.
                                                         // 2. administrador cannot edit their own role column.
                                                         // 3. non-admin/non-superadmin locked out.
                                                         const isTargetingSuperAdmin = role.id === 'super_admin';
                                                         const isTargetingSelf = (user?.role?.toLowerCase() === role.id.toLowerCase());
 
-                                                        const isDisabled = isTargetingSuperAdmin ||
+                                                        const isDisabled = !isSuperAdmin && (
                                                             (user?.role === 'administrador' && isTargetingSelf) ||
-                                                            (!isSuperAdmin && user?.role !== 'administrador');
+                                                            (user?.role !== 'administrador')
+                                                        );
 
                                                         if (!p) return <td key={role.id} className="py-2 border-r border-slate-100 bg-transparent" />;
 

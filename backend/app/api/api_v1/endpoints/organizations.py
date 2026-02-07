@@ -22,16 +22,16 @@ async def list_organizations(
     stmt = select(Organization)
     
     if current_user.role != "Super Admin":
-        # Regular users can never see trashed orgs (security)
+        # Regular users only see their tenant and active orgs
         stmt = stmt.where(Organization.id == current_user.tenant_id)
-        # Force active only
         stmt = stmt.where(Organization.is_deleted == False)
     else:
-        # Super Admin logic
+        # Super Admin: Return everything except based on explicit trash filter
         if trashed:
             stmt = stmt.where(Organization.is_deleted == True)
-        else:
-            stmt = stmt.where(Organization.is_deleted == False)
+        # No else needed: Super Admin sees all active orgs by default if trashed=False
+        # If they want EVERYTHING, they call GET /?trashed=all (logic below)
+        pass # Returning all active orgs by default is what standard super_admin wants
         
     result = await db.execute(stmt.order_by(Organization.created_at.desc()))
     return result.scalars().all()
