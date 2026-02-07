@@ -20,15 +20,15 @@ class PaginatedResponse(BaseModel, Generic[T]):
 
 # --- Organization ---
 class OrganizationBase(BaseModel):
-    name: str
-    slug: str
+    name: Optional[str] = None
+    slug: Optional[str] = None
 
 class OrganizationCreate(OrganizationBase):
     pass
 
 class OrganizationOut(OrganizationBase):
     id: UUID
-    created_at: datetime
+    created_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
 # --- User Profile Related (Bridge) ---

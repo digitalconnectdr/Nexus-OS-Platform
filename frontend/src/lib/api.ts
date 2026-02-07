@@ -4,11 +4,23 @@ import { toast } from '@/hooks/use-toast';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 console.log("🚀 Frontend API Configured URL:", API_URL);
 
+// --- SELECTOR CACHE ---
+const selectorCache: Record<string, { data: any, timestamp: number }> = {};
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export async function fetchFromAPI(endpoint: string, options: any = {}, retries = 3) {
     let lastError: any;
 
     const { data: { session } } = await supabase.auth.getSession();
     const token = session?.access_token;
+
+    // --- CHECK CACHE ---
+    if (endpoint.includes('/selectors/') && options.method === 'GET' || !options.method) {
+        const cached = selectorCache[endpoint];
+        if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+            return cached.data;
+        }
+    }
 
     for (let i = 0; i < retries; i++) {
         try {
@@ -83,7 +95,14 @@ export async function fetchFromAPI(endpoint: string, options: any = {}, retries 
                 throw error;
             }
 
-            return await response.json();
+            const result = await response.json();
+
+            // --- SAVE TO CACHE ---
+            if (endpoint.includes('/selectors/')) {
+                selectorCache[endpoint] = { data: result, timestamp: Date.now() };
+            }
+
+            return result;
         } catch (e: any) {
             lastError = e;
             if (i < retries - 1) {

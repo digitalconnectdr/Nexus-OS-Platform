@@ -112,7 +112,7 @@ async def toggle_status(
     
     # CRITICAL FIX: Lookup by Unique Constraint (Role + Resource + Action + Tenant)
     filters = [
-        RolePermission.role == clean_role,
+        RolePermission.role == clean_role.lower(),
         func.lower(RolePermission.resource) == clean_resource,
         func.lower(RolePermission.action) == clean_action,
         RolePermission.tenant_id == current_user.tenant_id
