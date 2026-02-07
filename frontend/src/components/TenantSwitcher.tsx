@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { fetchFromAPI } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import { BuildingOfficeIcon, ChevronDownIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 
 interface Organization {
@@ -10,16 +11,22 @@ interface Organization {
 }
 
 export default function TenantSwitcher() {
+    const { user } = useAuth();
     const [orgs, setOrgs] = useState<Organization[]>([]);
     const [currentOverride, setCurrentOverride] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const [isOpen, setIsOpen] = useState(false);
 
+    const isSuperAdmin = user?.role?.toLowerCase() === 'super_admin' || user?.role?.toLowerCase() === 'super admin' || user?.is_super_admin;
+
     useEffect(() => {
+        if (!isSuperAdmin) return;
         const stored = localStorage.getItem('x-tenant-override');
         setCurrentOverride(stored);
         fetchOrgs();
-    }, []);
+    }, [isSuperAdmin]);
+
+    if (!isSuperAdmin) return null;
 
     const fetchOrgs = async () => {
         try {

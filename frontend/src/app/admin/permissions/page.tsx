@@ -80,8 +80,11 @@ export default function PermissionsPage() {
     const [collapsedModules, setCollapsedModules] = useState<Record<string, boolean>>({});
 
     const isSuperAdmin = useMemo(() => {
-        return user?.role === 'Super Admin' || user?.is_super_admin;
+        const role = user?.role?.toLowerCase();
+        return role === 'super_admin' || role === 'super admin' || user?.is_super_admin;
     }, [user]);
+
+    const isReadOnly = !isSuperAdmin;
 
     const loadPermissions = useCallback(async () => {
         try {
@@ -118,7 +121,8 @@ export default function PermissionsPage() {
         // Master Security: super_admin can edit all except self.
         // administrador cannot edit self.
         const isSelfEdit = (user?.role?.toLowerCase() === perm.role.toLowerCase());
-        const canEdit = isSuperAdmin || (user?.role === 'administrador' && !isSelfEdit);
+        // Super Admin can edit everything. Administrador can edit anything except themselves.
+        const canEdit = isSuperAdmin || (user?.role?.toLowerCase() === 'administrador' && !isSelfEdit);
 
         if (!canEdit) return;
 
@@ -186,7 +190,7 @@ export default function PermissionsPage() {
                         <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Control de acceso basado en funcionalidades por rol</p>
                     </div>
                 </div>
-                {!isSuperAdmin && (
+                {isReadOnly && (
                     <div className="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-amber-700">
                         <LockClosedIcon className="w-4 h-4" />
                         <span className="text-[9px] font-black uppercase tracking-widest">Solo Lectura</span>
@@ -256,10 +260,7 @@ export default function PermissionsPage() {
                                                         const isTargetingSuperAdmin = role.id === 'super_admin';
                                                         const isTargetingSelf = (user?.role?.toLowerCase() === role.id.toLowerCase());
 
-                                                        const isDisabled = !isSuperAdmin && (
-                                                            (user?.role === 'administrador' && isTargetingSelf) ||
-                                                            (user?.role !== 'administrador')
-                                                        );
+                                                        const isDisabled = !isSuperAdmin;
 
                                                         if (!p) return <td key={role.id} className="py-2 border-r border-slate-100 bg-transparent" />;
 

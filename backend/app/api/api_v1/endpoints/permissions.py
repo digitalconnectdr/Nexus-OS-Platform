@@ -66,7 +66,7 @@ async def list_permissions(
     # Normalización agresiva para evitar "fantasmas" (Super Admin vs super_admin)
     current_role_norm = str(current_user.role).lower().replace(" ", "_")
     
-    if current_role_norm not in ["super_admin", "superadmin"]:
+    if not current_user.is_super_admin:
         # Si no soy Super Admin, solo puedo ver los permisos asignados a mi propio rol.
         stmt = stmt.where(RolePermission.role == current_role_norm)
         
@@ -189,12 +189,12 @@ async def get_my_permissions(
         "first_name": current_user.first_name,
         "last_name": current_user.last_name,
         "role": current_user.role,
-        "is_super_admin": current_user.role == UserRole.SUPER_ADMIN,
+        "is_super_admin": current_user.is_super_admin,
         "permissions": {}
     }
     
     # 2. If Super Admin, they have everything
-    if resp["is_super_admin"]:
+    if resp["is_super_admin"] or current_user.is_super_admin:
         return resp
     
     # 3. Fetch from DB

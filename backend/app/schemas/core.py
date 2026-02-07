@@ -73,7 +73,7 @@ class StatusOut(StatusBase):
 
 class RolePermissionOut(BaseModel):
     id: UUID
-    role: UserRole
+    role: str
     module: str
     resource: str
     action: str
@@ -82,7 +82,7 @@ class RolePermissionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class PermissionToggle(BaseModel):
-    target_role: UserRole
+    target_role: str
     module: Optional[str] = None
     resource: str
     action: str

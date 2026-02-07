@@ -21,7 +21,7 @@ async def list_organizations(
     """Listado de organizaciones vía SQL Directo"""
     stmt = select(Organization)
     
-    if current_user.role != "Super Admin":
+    if not current_user.is_super_admin:
         # Regular users only see their tenant and active orgs
         stmt = stmt.where(Organization.id == current_user.tenant_id)
         stmt = stmt.where(Organization.is_deleted == False)

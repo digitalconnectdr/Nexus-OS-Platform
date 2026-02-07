@@ -41,6 +41,13 @@ class UserProfile(Base):
             return f"{self.first_name} {self.last_name}"
         return self.first_name or self.email or "USUARIO"
 
+    @property
+    def is_super_admin(self) -> bool:
+        if not self.role:
+            return False
+        role = self.role.lower().replace(" ", "_").strip()
+        return role in ["super_admin", "superadmin"]
+
     # Operational Fields (Phase 19)
     supervisor_id = Column(UUID(as_uuid=True), ForeignKey("users_profiles.id"), nullable=True)
     default_campaign_id = Column(UUID(as_uuid=True), ForeignKey("campaigns.id"), nullable=True)

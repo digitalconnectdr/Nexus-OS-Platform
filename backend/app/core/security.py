@@ -36,7 +36,12 @@ ROLE_HIERARCHY = {
 
 def get_role_level(role_name: str) -> int:
     """Devuelve el nivel numérico del rol. Default 0 si no existe."""
-    return ROLE_HIERARCHY.get(role_name, 0)
+    if not role_name:
+        return 0
+    # Normalize for lookup
+    from app.schemas.user_schemas import UserRole
+    norm = UserRole.normalize(role_name)
+    return ROLE_HIERARCHY.get(norm, 0)
 
 async def get_current_user(
     request: Request,
@@ -81,7 +86,7 @@ async def get_current_user(
             if db_user:
                 # 3. TENANT OVERRIDE (Super Admin Context Switching)
                 current_tenant_id = str(db_user.tenant_id)
-                if (db_user.role == UserRole.SUPER_ADMIN or str(db_user.role) == "Super Admin") and x_tenant_id:
+                if db_user.is_super_admin and x_tenant_id:
                     try:
                         clean_tenant_id = x_tenant_id.strip('"').strip("'")
                         uuid_obj = uuid.UUID(clean_tenant_id)
@@ -123,12 +128,12 @@ def check_permission(resource: str, action: str, module: Optional[str] = None):
         db: AsyncSession = Depends(get_db)
     ):
         # 1. Master Key: Super Admin Bypass (Immediate & Handled BEFORE logs)
-        # NORMALIZATION: Ensure role enters lowercase for matching
-        role_str = str(user.role).lower().strip()
-        
-        # Exact truth bypass for Juan Carlos and other super admins
-        if role_str in ["super_admin", "super admin"]:
+        if user.is_super_admin:
             return True
+        
+        # NORMALIZATION: Ensure role enters lowercase for matching
+        from app.schemas.user_schemas import UserRole
+        role_str = UserRole.normalize(user.role)
 
         import logging
         logger = logging.getLogger(__name__)

@@ -19,20 +19,29 @@ class UserRole(str, Enum):
     CLIENTE = "cliente"
 
     @classmethod
+    def normalize(cls, value: str) -> str:
+        if not value:
+            return value
+        val = value.lower().strip()
+        # Remove accents
+        for a, b in [("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ú", "u")]:
+            val = val.replace(a, b)
+        # Standard mappings
+        mapping = {
+            "representative": "representante",
+            "agent": "representante",
+            "admin": "administrador",
+            "manager": "gerente",
+            "super admin": "super_admin",
+            "jprs": "super_admin" # Legacy
+        }
+        val = mapping.get(val, val).replace(" ", "_").replace("-", "_")
+        return val
+
+    @classmethod
     def _missing_(cls, value: object):
-        """Handle legacy/variant role strings by normalizing them before validation."""
         if isinstance(value, str):
-            val = value.lower().strip()
-            # Explicit English -> Spanish Mappings
-            mapping = {
-                "representative": "representante",
-                "agent": "representante",
-                "admin": "administrador",
-                "manager": "gerente",
-                "super admin": "super_admin"
-            }
-            target = mapping.get(val, val).replace(" ", "_")
-            
+            target = cls.normalize(value)
             for member in cls:
                 if member.value == target:
                     return member
@@ -41,7 +50,7 @@ class UserRole(str, Enum):
 class UserProfileBase(BaseModel):
     first_name: Optional[str] = None
     last_name: Optional[str] = None
-    role: Optional[UserRole] = None 
+    role: Optional[str] = None # Relaxed to str for robustness
     tenant_id: Optional[UUID] = None # Added for easier access
     avatar_url: Optional[str] = None
     is_active: bool = True
