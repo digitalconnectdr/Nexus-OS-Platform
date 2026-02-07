@@ -1,5 +1,5 @@
-from typing import Optional
-from pydantic import BaseModel, ConfigDict
+from typing import Optional, Any
+from pydantic import BaseModel, ConfigDict, field_validator
 from datetime import datetime
 from uuid import UUID
 
@@ -17,7 +17,21 @@ class OrganizationUpdate(OrganizationBase):
 
 class OrganizationOut(OrganizationBase):
     id: UUID
-    name: Optional[str] = None
-    slug: Optional[str] = None
-    created_at: Optional[datetime] = None
+    name: str
+    slug: str
+    created_at: datetime
+    
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator('created_at', mode='before')
+    @classmethod
+    def normalize_datetime(cls, v: Any) -> datetime:
+        if v is None:
+            # Fallback for safety only, field is technically required
+            return datetime.now()
+        if isinstance(v, str):
+            try:
+                return datetime.fromisoformat(v.replace('Z', '+00:00'))
+            except ValueError:
+                return datetime.now()
+        return v

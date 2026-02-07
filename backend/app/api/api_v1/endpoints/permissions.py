@@ -61,9 +61,12 @@ async def list_permissions(
     stmt = select(RolePermission).where(RolePermission.tenant_id == current_user.tenant_id)
     
     # --- REGLA DE JERARQUÍA: VISIBILIDAD LIMITADA ---
-    # Si no soy Super Admin, solo puedo ver los permisos asignados a mi propio rol.
-    if current_user.role != UserRole.SUPER_ADMIN:
-        stmt = stmt.where(RolePermission.role == current_user.role)
+    # Normalización agresiva para evitar "fantasmas" (Super Admin vs super_admin)
+    current_role_norm = str(current_user.role).lower().replace(" ", "_")
+    
+    if current_role_norm not in ["super_admin", "superadmin"]:
+        # Si no soy Super Admin, solo puedo ver los permisos asignados a mi propio rol.
+        stmt = stmt.where(RolePermission.role == current_role_norm)
         
     result = await db.execute(stmt)
     perms = result.scalars().all()
