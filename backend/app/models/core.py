@@ -195,9 +195,9 @@ class RolePermission(Base):
     name = Column(String) # Descriptive label for UI
     is_allowed = Column(Boolean, default=False)
 
-    # Unique constraint per role, resource, action, and tenant
+    # Unique constraint per role, module, resource, action, and tenant
     __table_args__ = (
-        UniqueConstraint('role', 'resource', 'action', 'tenant_id', name='_role_resource_action_tenant_uc'),
+        UniqueConstraint('role', 'module', 'resource', 'action', 'tenant_id', name='_role_module_resource_action_tenant_uc'),
     )
 
     # Relationship

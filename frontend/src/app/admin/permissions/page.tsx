@@ -241,24 +241,16 @@ export default function PermissionsPage() {
                                                         const isUpdating = loadingStates[cellKey];
 
                                                         // Security Logic:
-                                                        // 1. super_admin can edit all.
-                                                        // 2. administrador cannot edit their own role column.
-                                                        // 3. non-admin/non-superadmin locked out.
-                                                        const isTargetingSuperAdmin = role.id === 'super_admin';
-                                                        const isTargetingSelf = (user?.role?.toLowerCase() === role.id.toLowerCase());
-
                                                         const isDisabled = !isSuperAdmin;
-
-                                                        if (!p) return <td key={role.id} className="py-2 border-r border-slate-100 bg-transparent" />;
 
                                                         return (
                                                             <td key={role.id} className="py-2 border-r border-slate-100 text-center bg-transparent">
                                                                 <div className="flex justify-center items-center h-full">
                                                                     <div className="relative">
                                                                         <Switch
-                                                                            checked={p.is_allowed}
-                                                                            onCheckedChange={() => handleToggle(p, p.is_allowed)}
-                                                                            disabled={isDisabled || isUpdating}
+                                                                            checked={p?.is_allowed || false}
+                                                                            onCheckedChange={() => p && handleToggle(p, p.is_allowed)}
+                                                                            disabled={isDisabled || isUpdating || !p}
                                                                         />
                                                                         {isUpdating && (
                                                                             <div className="absolute inset-0 flex items-center justify-center bg-white/40 rounded-full">
