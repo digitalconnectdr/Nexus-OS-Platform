@@ -59,10 +59,10 @@ async def create_organization(
     # so that FK relationships in the subsequent seed are valid internal to the transaction.
     await db.flush()
     
-    # 2. SEED PERMISSIONS (SQLAlchemy - Same Transaction)
+    # 2. SEED PERMISSIONS (Catalog-based - Same Transaction)
     try:
         from app.core.permissions_seed import initialize_organization_permissions
-        # Pass DB session. Seed will INSERT permissions via ORM.
+        # Seed will INSERT all 192+ (implied) permissions via master catalog.
         await initialize_organization_permissions(db_org.id, db)
         
         # 3. COMMIT EVERYTHING (Org + Perms)
