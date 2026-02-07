@@ -73,9 +73,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
                 console.log('✅ [AUTH] Sincronización completa.', { email: userData.email, role: userData.role });
 
-                // --- EMERGENCY NORMALIZATION ---
+                // --- THOROUGH NORMALIZATION ---
                 if (userData.role) {
-                    userData.role = userData.role.toLowerCase();
+                    userData.role = userData.role.toLowerCase().trim()
+                        .replace(/[áäàâ]/g, 'a')
+                        .replace(/[éëèê]/g, 'e')
+                        .replace(/[íïìî]/g, 'i')
+                        .replace(/[óöòô]/g, 'o')
+                        .replace(/[úüùû]/g, 'u')
+                        .replace(/[ñ]/g, 'n')
+                        .replace(/\s+/g, '_')
+                        .replace(/-/g, '_');
+
+                    // Specific mapping
+                    if (userData.role === 'representative') userData.role = 'representante';
+                    if (userData.role === 'agent') userData.role = 'representante';
+                    if (userData.role === 'admin') userData.role = 'administrador';
+                    if (userData.role === 'manager') userData.role = 'gerente';
+                    if (userData.role === 'super_admin' || userData.role === 'super admin' || userData.role === 'jprs') {
+                        userData.role = 'super_admin';
+                    }
                 }
                 // -------------------------------
 
@@ -116,7 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // --- SUPER ADMIN BYPASS (Safe & Normalized) ---
         const userRole = (authState.user.role || '').toLowerCase();
-        if (userRole === 'super admin' || userRole === 'super_admin') return true;
+        if (userRole === 'super_admin') return true;
         // ----------------------------------------------
 
         // Tri-factor lookup: module:resource:action

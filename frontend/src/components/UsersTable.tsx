@@ -3,6 +3,7 @@ import { PencilIcon, UserIcon } from '@heroicons/react/24/outline';
 import { fetchFromAPI } from '@/lib/api';
 import Modal from '@/components/Modal';
 import { usePermission } from '@/hooks/usePermission';
+import { getRoleLabel } from '@/lib/constants';
 
 interface UsersTableProps {
     data: any[];
@@ -124,7 +125,7 @@ export default function UsersTable({ data, supervisors, campaigns, onRefresh }: 
                                     </div>
                                     <div className="flex flex-col">
                                         <span className="text-[12px] font-bold text-gray-800 dark:text-slate-200 uppercase tracking-tight">{item.first_name} {item.last_name}</span>
-                                        <span className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">{item.role}</span>
+                                        <span className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest">{getRoleLabel(item.role)}</span>
                                     </div>
                                 </div>
                             </td>
@@ -228,7 +229,7 @@ export default function UsersTable({ data, supervisors, campaigns, onRefresh }: 
                                     <label className="text-[12px] font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wider pl-1 font-mono">Rol de Sistema</label>
                                     <div className="flex items-center gap-2 h-9 px-3 bg-blue-50/30 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900 rounded-md text-blue-700 dark:text-blue-400 text-xs font-bold uppercase tracking-tight">
                                         <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                                        {editingItem?.role || 'REPRESENTANTE'}
+                                        {getRoleLabel(editingItem?.role) || 'REPRESENTANTE'}
                                     </div>
                                 </div>
                             </div>

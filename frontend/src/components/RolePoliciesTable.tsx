@@ -5,6 +5,8 @@ import { fetchFromAPI } from '@/lib/api';
 import LoadingState from '@/components/ui/LoadingState';
 import { usePermission } from '@/hooks/usePermission';
 
+import { ROLES_CONFIG, getRoleLabel } from '@/lib/constants';
+
 export default function RolePoliciesTable() {
     const { can } = usePermission();
     const isReadOnly = !can('config_policies', 'policies', 'manage');
@@ -13,12 +15,6 @@ export default function RolePoliciesTable() {
     const [actionLoading, setActionLoading] = useState(false);
     const [statuses, setStatuses] = useState<any[]>([]);
     const [tenantId, setTenantId] = useState<string | null>(null);
-
-    const roles = [
-        "Super Admin", "Administrador", "Cliente", "Gerente",
-        "Supervisor Senior", "Supervisor", "Dpto Estadistica",
-        "Auditor Calidad", "Seguimiento", "Digitación", "Representante"
-    ];
 
     useEffect(() => {
         loadData();
@@ -128,9 +124,9 @@ export default function RolePoliciesTable() {
     };
 
     // Ensure all roles have a policy object for the UI
-    const roleList = roles.map(roleName => {
-        const policy = policies.find(p => p.role === roleName) || {
-            role: roleName,
+    const roleList = ROLES_CONFIG.map(roleObj => {
+        const policy = policies.find(p => p.role === roleObj.id) || {
+            role: roleObj.id,
             smart_routing_enabled: false,
             default_limit: 5,
             workable_statuses: ["PENDIENTE"]
@@ -156,7 +152,9 @@ export default function RolePoliciesTable() {
                         <tr key={policy.role} className="hover:bg-blue-50/20 dark:hover:bg-blue-900/10 transition-all">
                             <td className="px-6 py-4">
                                 <div className="flex flex-col">
-                                    <span className="text-[12px] font-bold text-gray-900 dark:text-slate-100 uppercase tracking-tight">{policy.role}</span>
+                                    <span className="text-[12px] font-bold text-gray-900 dark:text-slate-100 uppercase tracking-tight">
+                                        {getRoleLabel(policy.role)}
+                                    </span>
                                     <span className="text-[9px] text-gray-400 dark:text-slate-500 font-bold uppercase tracking-wider">Configuración de Capacidad</span>
                                 </div>
                             </td>

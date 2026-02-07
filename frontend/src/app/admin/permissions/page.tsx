@@ -22,6 +22,7 @@ import {
     BuildingOfficeIcon,
     BoltIcon
 } from '@heroicons/react/24/outline';
+import { ROLES_CONFIG } from '@/lib/constants';
 import { Trophy } from 'lucide-react';
 import { fetchFromAPI } from '@/lib/api';
 import LoadingState from '@/components/ui/LoadingState';
@@ -37,20 +38,6 @@ interface PermissionEntry {
     name: string;
     is_allowed: boolean;
 }
-
-const ROLES_CONFIG = [
-    { id: "super_admin", label: "Super Admin" },
-    { id: "administrador", label: "Administrador" },
-    { id: "cliente", label: "Cliente" },
-    { id: "gerente", label: "Gerente" },
-    { id: "supervisor_senior", label: "Supervisor Senior" },
-    { id: "supervisor", label: "Supervisor" },
-    { id: "dpto_estadistica", label: "Dpto Estadistica" },
-    { id: "seguimiento", label: "Seguimiento" },
-    { id: "digitacion", label: "Digitación" },
-    { id: "auditor_calidad", label: "Auditor Calidad" },
-    { id: "representante", label: "Representante" }
-];
 
 const MODULE_CONFIG: Record<string, { label: string, icon: any, color: string }> = {
     'dashboard': { label: 'Dashboard Real Time', icon: PresentationChartLineIcon, color: 'text-blue-600' },
