@@ -35,6 +35,10 @@ export default function OrganizationsPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
     const [showDeleted, setShowDeleted] = useState(false);
+    const [formData, setFormData] = useState({
+        name: '',
+        slug: ''
+    });
 
     const fetchOrgs = async () => {
         setLoading(true);

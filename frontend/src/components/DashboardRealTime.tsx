@@ -148,34 +148,36 @@ export default function DashboardRealTime() {
             setCampaigns(safeCampaigns);
             setSupervisors(supervisorsData?.items || (Array.isArray(supervisorsData) ? supervisorsData : []));
 
-            // Fetch Active Tournaments for Race Track
-            if (can?.('tournaments', 'tournaments', 'view_race_track')) {
-                try {
-                    const tourns = await fetchFromAPI("/api/v1/tournaments/");
-                    if (tourns && Array.isArray(tourns)) {
-                        // Limit to top 5 active/current tournaments
-                        const activeList = tourns.slice(0, 5);
-                        const dataWithLB = await Promise.all(activeList.map(async (t: any) => {
-                            try {
-                                const lb = await fetchFromAPI(`/api/v1/tournaments/${t.id}/leaderboard`);
-                                return {
-                                    tournament: t,
-                                    leaderboard: lb?.entries || []
-                                };
-                            } catch (lbErr) {
-                                return { tournament: t, leaderboard: [] };
-                            }
-                        }));
-                        setTournamentsData(dataWithLB);
-                    }
-                } catch (tErr) {
-                    console.error("Error loading tournament data for dashboard:", tErr);
-                }
-            }
         } catch (err) {
             console.error("Error loading dashboard data:", err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadTournaments = async () => {
+        if (!can?.('tournaments', 'tournaments', 'view_race_track')) return;
+
+        try {
+            const tourns = await fetchFromAPI("/api/v1/tournaments/");
+            if (tourns && Array.isArray(tourns)) {
+                // Limit to top 5 active/current tournaments
+                const activeList = tourns.slice(0, 5);
+                const dataWithLB = await Promise.all(activeList.map(async (t: any) => {
+                    try {
+                        const lb = await fetchFromAPI(`/api/v1/tournaments/${t.id}/leaderboard`);
+                        return {
+                            tournament: t,
+                            leaderboard: lb?.entries || []
+                        };
+                    } catch (lbErr) {
+                        return { tournament: t, leaderboard: [] };
+                    }
+                }));
+                setTournamentsData(dataWithLB);
+            }
+        } catch (tErr) {
+            console.error("Error loading tournament data for dashboard:", tErr);
         }
     };
 
@@ -193,8 +195,12 @@ export default function DashboardRealTime() {
         }
 
         loadData();
+        loadTournaments(); // Non-blocking load
 
-        const handleRefresh = () => loadData();
+        const handleRefresh = () => {
+            loadData();
+            loadTournaments();
+        };
         window.addEventListener('refresh-sales', handleRefresh);
         return () => window.removeEventListener('refresh-sales', handleRefresh);
     }, [pageIndex, pageSize, permsLoading, can]);
