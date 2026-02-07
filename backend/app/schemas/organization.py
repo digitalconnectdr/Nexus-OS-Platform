@@ -17,5 +17,7 @@ class OrganizationUpdate(OrganizationBase):
 
 class OrganizationOut(OrganizationBase):
     id: UUID
+    name: Optional[str] = None
+    slug: Optional[str] = None
     created_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)

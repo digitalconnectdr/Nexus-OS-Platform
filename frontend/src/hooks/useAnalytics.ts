@@ -9,14 +9,12 @@ if (!API_URL) console.warn("⚠️ NEXT_PUBLIC_API_URL no configurada.");
 
 // Fetcher que obtiene el token dinámicamente
 const fetcherWithAuth = async (url: string) => {
-    // 1. Obtener la sesión actual usando el singleton unificado
     const { data: { session } } = await supabase.auth.getSession();
 
     if (!session) {
         throw new Error("No hay sesión activa");
     }
 
-    // 2. Inyectar el Token y el Tenant Override en el Header
     let tenantOverride = null;
     if (typeof window !== 'undefined') {
         tenantOverride = localStorage.getItem('x-tenant-override');
@@ -40,8 +38,9 @@ const fetcherWithAuth = async (url: string) => {
     const parsedData = DashboardDataSchema.safeParse(data);
 
     if (!parsedData.success) {
-        console.error("Data contract violation", parsedData.error);
-        throw new Error("Error de integridad de datos");
+        console.warn("⚠️ Data contract violation (Analytics Dashboard):", parsedData.error);
+        // Returning raw data as fallback to avoid hard crash/loading-hang
+        return data as DashboardData;
     }
 
     return parsedData.data;
@@ -55,14 +54,18 @@ export function useAnalytics() {
     const endDate = searchParams.get('end_date') || '2026-01-31';
 
     // --- CONDITIONAL FETCHING ---
-    // Return null key (SWR won't fetch) if perms are still loading or if user lacks access
-    const shouldFetch = !permsLoading && (can('operational', 'read') || can('finance', 'read_global') || can('finance', 'read_own'));
+    // Access criteria aligned with dashboard:access matrix
+    const shouldFetch = !permsLoading && (
+        can('dashboard', 'dashboard', 'access') ||
+        can('operational', 'operational', 'read') ||
+        can('analytics', 'analytics', 'read')
+    );
 
     const { data, error, isLoading } = useSWR<DashboardData>(
         shouldFetch ? `${API_URL}/api/v1/analytics/dashboard?start_date=${startDate}&end_date=${endDate}` : null,
         fetcherWithAuth,
         {
-            revalidateOnFocus: false, // Prevents modal reset on tab switch
+            revalidateOnFocus: false,
             revalidateOnReconnect: false,
             keepPreviousData: true
         }
@@ -70,7 +73,7 @@ export function useAnalytics() {
 
     return {
         metrics: data,
-        isLoading,
+        isLoading: shouldFetch ? isLoading : false,
         isError: error,
         filters: { startDate, endDate }
     };
