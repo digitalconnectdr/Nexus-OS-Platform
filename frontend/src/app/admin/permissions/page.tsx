@@ -44,7 +44,7 @@ const MODULE_CONFIG: Record<string, { label: string, icon: any, color: string }>
     'history': { label: 'Historial de Ventas', icon: CircleStackIcon, color: 'text-indigo-600' },
     'performance': { label: 'Gestión del Desempeño', icon: BriefcaseIcon, color: 'text-emerald-600' },
     'finance': { label: 'Gestión Financiera', icon: CurrencyDollarIcon, color: 'text-orange-600' },
-    'config_hub': { label: 'Configuración de Catálogos', icon: Cog6ToothIcon, color: 'text-purple-600' },
+    'config_hub': { label: 'Configuración', icon: Cog6ToothIcon, color: 'text-purple-600' },
     'system': { label: 'Núcleo del Sistema', icon: ShieldCheckIcon, color: 'text-gray-600' },
     'tournaments': { label: 'Torneos y Competencias', icon: Trophy, color: 'text-yellow-600' },
     'dev_modules': { label: 'Módulos en Desarrollo', icon: CpuChipIcon, color: 'text-rose-600' },
