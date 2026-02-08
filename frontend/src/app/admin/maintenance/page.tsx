@@ -317,7 +317,7 @@ export default function MaintenancePage() {
                                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Período</label>
                                     <div className="flex gap-2">
                                         <select
-                                            className="w-1/3 p-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm bg-white"
+                                            className="flex-1 p-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm bg-white text-center cursor-pointer hover:border-indigo-300 transition-colors"
                                             value={selectedYear}
                                             onChange={(e) => setSelectedYear(e.target.value)}
                                         >
@@ -326,7 +326,7 @@ export default function MaintenancePage() {
                                             <option value="2026">2026</option>
                                         </select>
                                         <select
-                                            className="w-2/3 p-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm bg-white"
+                                            className="flex-[2] p-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm bg-white cursor-pointer hover:border-indigo-300 transition-colors"
                                             value={selectedMonth}
                                             onChange={(e) => setSelectedMonth(e.target.value)}
                                         >

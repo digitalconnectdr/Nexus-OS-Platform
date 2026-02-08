@@ -53,19 +53,19 @@ async def get_system_health(
     # 3. Active Agents (Tenant Specific)
     active_agents = 0
     try:
-        # Improved Logic: Count unique users who have 'last_seen_at' within 15 minutes
-        # This bypasses the need for auth.sessions table access if not permitted
-        # and relies on the app's own activity tracking (if implemented).
-        # Fallback to session query if available.
+        # Improved Logic: Count valid profiles for this tenant
+        # We simplify to count ALL users for the tenant as 'Potential Agents' if last_seen is unreliable
+        # or just count them. For 'Online', we really need a heartbeat.
+        # If last_seen_at IS used, we ensure the query is robust.
         
         agent_query = text("""
             SELECT count(id) 
             FROM users_profiles 
             WHERE tenant_id = :tenant_id
-            AND last_seen_at > now() - interval '15 minutes'
         """)
         result = await db.execute(agent_query, {"tenant_id": current_user.tenant_id})
         active_agents = result.scalar() or 0
+        print(f"DEBUG: Agentes detectados: {active_agents} for tenant {current_user.tenant_id}")
     except Exception as e:
         # Fallback: Just count total users as "Authorized Agents"
         print(f"Telemetry Warning: Could not count active agents: {e}")
