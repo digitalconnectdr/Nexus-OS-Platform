@@ -10,7 +10,8 @@ import json
 
 from app.api import deps
 from app.core.security import get_current_user
-from app.db.models import Organization
+from app.core.security import get_current_user
+from app.models.core import Organization
 
 router = APIRouter()
 
