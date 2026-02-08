@@ -52,64 +52,37 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                 console.warn("🚫 Access denied to /config");
                 router.push('/');
             }
+            else if (pathname.startsWith('/sales/history') && !hasPermission('history', 'sales', 'read')) {
+                console.warn("🚫 Access denied to /sales/history");
+                router.push('/');
+            }
+            else if (pathname.startsWith('/calculator') && !hasPermission('dashboard', 'calculator', 'access')) {
+                console.warn("🚫 Access denied to /calculator");
+                router.push('/');
+            }
         }
     }, [pathname, session, isLoading, router, hasPermission]);
 
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+    const showSidebar = !!session && !isPublicRoute;
+
+    // Persist sidebar state
     useEffect(() => {
-        const handleOnline = () => setIsOffline(false);
-        const handleOffline = () => setIsOffline(true);
-
-        window.addEventListener('online', handleOnline);
-        window.addEventListener('offline', handleOffline);
-
-        if (typeof navigator !== 'undefined' && !navigator.onLine) {
-            setIsOffline(true);
-        }
-
-        return () => {
-            window.removeEventListener('online', handleOnline);
-            window.removeEventListener('offline', handleOffline);
-        };
+        const saved = localStorage.getItem('sidebar_collapsed_mode');
+        if (saved) setIsSidebarCollapsed(JSON.parse(saved));
     }, []);
 
-    if (isLoading && !isPublicRoute && !user && !session) {
-        return (
-            <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white">
-                <div className="relative mb-8">
-                    <div className="w-20 h-20 bg-blue-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-blue-500/40 animate-pulse">
-                        <svg className="w-12 h-12 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 00-2 2z" />
-                        </svg>
-                    </div>
-                    <div className="absolute -inset-4 border-2 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
-                </div>
-
-                <div className="text-center space-y-2">
-                    <h2 className="text-2xl font-black text-gray-900 tracking-tighter uppercase">NEXUS OS</h2>
-                    <div className="flex flex-col items-center gap-1">
-                        <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] opacity-80">Sincronizando Perfil Operativo</p>
-                        <div className="flex gap-1">
-                            <div className="w-1 h-1 bg-blue-600 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                            <div className="w-1 h-1 bg-blue-600 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                            <div className="w-1 h-1 bg-blue-600 rounded-full animate-bounce"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="absolute bottom-12 text-[9px] font-black text-gray-400 uppercase tracking-widest">
-                    Enterprise Cloud Stack • v2.0.4
-                </div>
-            </div>
-        );
-    }
-
-    const showSidebar = !!session && !isPublicRoute;
+    const toggleSidebar = () => {
+        const newVal = !isSidebarCollapsed;
+        setIsSidebarCollapsed(newVal);
+        localStorage.setItem('sidebar_collapsed_mode', JSON.stringify(newVal));
+    };
 
     return (
         <>
-            {showSidebar && <Sidebar />}
+            {showSidebar && <Sidebar isCollapsed={isSidebarCollapsed} onToggle={toggleSidebar} />}
 
-            <div className={`${showSidebar ? 'pl-56' : ''} min-h-screen flex flex-col transition-all duration-300`}>
+            <div className={`${showSidebar ? (isSidebarCollapsed ? 'pl-20' : 'pl-60') : ''} min-h-screen flex flex-col transition-all duration-300`}>
                 {showSidebar && (
                     <header className="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between px-8 sticky top-0 z-[90] shadow-sm">
                         <div className="flex items-center gap-3">

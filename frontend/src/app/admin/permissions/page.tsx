@@ -6,21 +6,14 @@ import {
     LockClosedIcon,
     ChevronDownIcon,
     ChevronRightIcon,
-    Bars3Icon,
     CircleStackIcon,
     CurrencyDollarIcon,
-    TagIcon,
     Cog6ToothIcon,
-    EyeIcon,
     PresentationChartLineIcon,
     UserGroupIcon,
-    KeyIcon,
     BriefcaseIcon,
     CubeIcon,
-    AdjustmentsHorizontalIcon,
-    CpuChipIcon,
-    BuildingOfficeIcon,
-    BoltIcon
+    BuildingOfficeIcon
 } from '@heroicons/react/24/outline';
 import { ROLES_CONFIG } from '@/lib/constants';
 import { Trophy } from 'lucide-react';
@@ -47,7 +40,7 @@ const MODULE_CONFIG: Record<string, { label: string, icon: any, color: string }>
     'config_hub': { label: 'Configuración', icon: Cog6ToothIcon, color: 'text-purple-600' },
     'system': { label: 'Núcleo del Sistema', icon: ShieldCheckIcon, color: 'text-gray-600' },
     'tournaments': { label: 'Torneos y Competencias', icon: Trophy, color: 'text-yellow-600' },
-    'dev_modules': { label: 'Módulos en Desarrollo', icon: CpuChipIcon, color: 'text-rose-600' },
+    'dev_modules': { label: 'Módulos en Desarrollo', icon: CubeIcon, color: 'text-rose-600' },
     'system_reserved': { label: 'SISTEMA: RESERVAS TÉCNICAS', icon: LockClosedIcon, color: 'text-slate-400' },
 };
 
@@ -63,6 +56,20 @@ const MODULE_ORDER = [
     'system_reserved'
 ];
 
+const HIERARCHY_ORDER = [
+    'super_admin',
+    'administrador',
+    'gerente',
+    'supervisor_senior',
+    'supervisor',
+    'representante',
+    'auditor_calidad',
+    'seguimiento',
+    'digitacion',
+    'dpto_estadistica',
+    'cliente'
+];
+
 export default function PermissionsPage() {
     const { user } = useAuth();
     const [rawPermissions, setRawPermissions] = useState<PermissionEntry[]>([]);
@@ -75,7 +82,7 @@ export default function PermissionsPage() {
         return role === 'super_admin' || role === 'super admin' || user?.is_super_admin;
     }, [user]);
 
-    const isReadOnly = !isSuperAdmin;
+    const isReadOnly = !isSuperAdmin; // UI Indicator only, logic is stricter below
 
     const loadPermissions = useCallback(async () => {
         try {
@@ -109,13 +116,23 @@ export default function PermissionsPage() {
     }, [loadPermissions, user?.tenant]);
 
     const handleToggle = (perm: PermissionEntry, currentValue: boolean) => {
-        // Master Security: super_admin can edit all except self.
-        // administrador cannot edit self.
-        const isSelfEdit = (user?.role?.toLowerCase() === perm.role.toLowerCase());
-        // Super Admin can edit everything. Administrador can edit anything except themselves.
-        const canEdit = isSuperAdmin || (user?.role?.toLowerCase() === 'administrador' && !isSelfEdit);
+        // Double Check logic even here
+        const myRole = user?.role?.toLowerCase();
+        const myLevel = HIERARCHY_ORDER.indexOf(myRole || '');
+        const targetLevel = HIERARCHY_ORDER.indexOf(perm.role);
 
-        if (!canEdit) return;
+        let canEdit = false;
+        if (isSuperAdmin) {
+            canEdit = true;
+        } else if (myLevel !== -1 && targetLevel !== -1) {
+            // Strict Heirarchy: Admin (1) can edit Gerente (2). 1 < 2 is True.
+            canEdit = myLevel < targetLevel;
+        }
+
+        if (!canEdit) {
+            console.error("Security Violation: Attempt to edit protected role.");
+            return;
+        }
 
         const newValue = !currentValue;
         const cellKey = `${perm.role}-${perm.resource}:${perm.action}`;
@@ -155,23 +172,20 @@ export default function PermissionsPage() {
         const matrix: Record<string, Record<string, Record<string, PermissionEntry>>> = {};
 
         // HIERARCHICAL INVISIBILITY RULE:
-        // A user (e.g. Administrator) can ONLY see rows where they THEMSELVES have the permission.
-        // If I am 'administrador' and I don't have 'system:audit:read', I cannot see that row at all.
-        // Super Admin sees everything.
-
+        // A user can ONLY see rows where they THEMSELVES have the permission.
         const myRole = user?.role?.toLowerCase() || 'public';
-        const amISuper = isSuperAdmin; // Cached boolean
+        const amISuper = isSuperAdmin;
 
         const validFuncKeys = new Set<string>();
 
-        // 1. First pass: Identify which permissions *I* have (or if I'm super admin, all)
+        // 1. First pass: Identify which permissions *I* have
         rawPermissions.forEach(p => {
             const funcKey = `${p.resource}:${p.action}`;
 
             if (amISuper) {
                 validFuncKeys.add(funcKey);
             } else {
-                // Check if this permission row belongs to ME and is ALLOWED
+                // I only see rows where I have the permission enabled myself
                 if (p.role === myRole && p.is_allowed) {
                     validFuncKeys.add(funcKey);
                 }
@@ -195,7 +209,10 @@ export default function PermissionsPage() {
         return matrix;
     }, [rawPermissions, user, isSuperAdmin]);
 
-    if (loading) return <LoadingState message="Sincronizando Matriz de Funcionalidades..." />;
+    if (loading) return <LoadingState message="Sincronizando Matriz de Jerarquía..." />;
+
+    const myRole = user?.role?.toLowerCase();
+    const myLevel = HIERARCHY_ORDER.indexOf(myRole || '');
 
     return (
         <div className="p-6 space-y-6 bg-white min-h-screen">
@@ -205,16 +222,10 @@ export default function PermissionsPage() {
                         <ShieldCheckIcon className="w-7 h-7 text-blue-600" />
                     </div>
                     <div>
-                        <h1 className="text-xl font-bold text-slate-900 tracking-tight uppercase">Matriz de Funcionalidades</h1>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Control de acceso basado en funcionalidades por rol</p>
+                        <h1 className="text-xl font-bold text-slate-900 tracking-tight uppercase">Matriz de Jerarquía</h1>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Visibilidad y Control Estrictamente Jerárquico</p>
                     </div>
                 </div>
-                {isReadOnly && (
-                    <div className="px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-amber-700">
-                        <LockClosedIcon className="w-4 h-4" />
-                        <span className="text-[9px] font-black uppercase tracking-widest">Solo Lectura</span>
-                    </div>
-                )}
             </header>
 
             <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden mt-4">
@@ -277,18 +288,41 @@ export default function PermissionsPage() {
                                                         const cellKey = `${role.id}-${funcKey}`;
                                                         const isUpdating = loadingStates[cellKey];
 
-                                                        // Security Logic:
-                                                        const isDisabled = !isSuperAdmin;
+                                                        // --- COLUMN PROTECTION LOGIC ---
+                                                        const targetLevel = HIERARCHY_ORDER.indexOf(role.id);
+
+                                                        let isDisabled = true;
+                                                        if (isSuperAdmin) {
+                                                            isDisabled = false; // God Mode
+                                                        } else if (myLevel !== -1 && targetLevel !== -1) {
+                                                            // Logic: Available ONLY if I am STRICTLY higher (lower index) than target
+                                                            // Admin(1) vs Admin(1) -> 1 < 1 False -> Disabled
+                                                            // Admin(1) vs Gerente(2) -> 1 < 2 True -> Enabled
+                                                            if (myLevel < targetLevel) {
+                                                                isDisabled = false;
+                                                            }
+                                                        }
+
+                                                        // Always disable if module reserved or updating or no permission object
+                                                        if (module === 'system_reserved' || isUpdating || !p) isDisabled = true;
 
                                                         return (
                                                             <td key={role.id} className="py-2 border-r border-slate-100 text-center bg-transparent">
                                                                 <div className="flex justify-center items-center h-full">
                                                                     <div className="relative">
-                                                                        <Switch
-                                                                            checked={p?.is_allowed || false}
-                                                                            onCheckedChange={() => p && handleToggle(p, p.is_allowed)}
-                                                                            disabled={isDisabled || isUpdating || !p || module === 'system_reserved'}
-                                                                        />
+                                                                        {isDisabled ? (
+                                                                            p?.is_allowed ? (
+                                                                                <LockClosedIcon className="w-4 h-4 text-green-600/50" />
+                                                                            ) : (
+                                                                                <div className="w-4 h-4 rounded-full bg-slate-100 border border-slate-200"></div>
+                                                                            )
+                                                                        ) : (
+                                                                            <Switch
+                                                                                checked={p?.is_allowed || false}
+                                                                                onCheckedChange={() => p && handleToggle(p, p.is_allowed)}
+                                                                                disabled={isDisabled}
+                                                                            />
+                                                                        )}
                                                                         {isUpdating && (
                                                                             <div className="absolute inset-0 flex items-center justify-center bg-white/40 rounded-full">
                                                                                 <div className="w-2.5 h-2.5 border-2 border-blue-600 border-t-transparent animate-spin rounded-full" />
@@ -311,10 +345,8 @@ export default function PermissionsPage() {
             </div>
 
             <div className="flex flex-col gap-1 mt-6">
-                <p className="text-[10px] text-slate-400 italic">• Los cambios en la matriz tienen efecto inmediato sobre la visibilidad de componentes.</p>
-                <p className="text-[10px] text-slate-400 italic">• Solo usuarios con privilegios de Super Admin pueden modificar esta configuración.</p>
-                <p className="text-[10px] text-slate-400 italic">• El modelo utiliza arquitectura de Feature Flags para optimización de seguridad.</p>
-                <p className="text-[10px] text-slate-400 italic">• Los interruptores muestran el estado actual de acceso por funcionalidad y rol.</p>
+                <p className="text-[10px] text-slate-400 italic font-bold">• VISIBILIDAD JERÁRQUICA ACTIVA: Solo visualiza funciones que su propio rol posee.</p>
+                <p className="text-[10px] text-slate-400 italic font-bold">• PROTECCIÓN DE COLUMNAS: Solo puede editar roles de menor jerarquía (índice inferior).</p>
             </div>
         </div>
     );

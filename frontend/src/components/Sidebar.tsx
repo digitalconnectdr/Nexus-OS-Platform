@@ -17,24 +17,29 @@ import {
 } from '@heroicons/react/24/outline';
 import { Trophy, ShieldCheck, Users, Activity, FileText } from 'lucide-react';
 
-export default function Sidebar() {
+interface SidebarProps {
+    isCollapsed: boolean;
+    onToggle: () => void;
+}
+
+export default function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
     const pathname = usePathname();
     const { user, signOut, permissions } = useAuth();
     const { can } = usePermission();
 
-    // Session Memory for Collapsible Sections
-    const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
+    // Session Memory for Collapsible Sections (Vertical)
+    const [sectionCollapsed, setSectionCollapsed] = useState<Record<string, boolean>>(() => {
         if (typeof window !== 'undefined') {
-            const saved = localStorage.getItem('sidebar_state');
+            const saved = localStorage.getItem('sidebar_section_state');
             return saved ? JSON.parse(saved) : {};
         }
         return {};
     });
 
     const toggleSection = (section: string) => {
-        const newState = { ...collapsed, [section]: !collapsed[section] };
-        setCollapsed(newState);
-        localStorage.setItem('sidebar_state', JSON.stringify(newState));
+        const newState = { ...sectionCollapsed, [section]: !sectionCollapsed[section] };
+        setSectionCollapsed(newState);
+        localStorage.setItem('sidebar_section_state', JSON.stringify(newState));
     };
 
     const displayName = useMemo(() => {
@@ -74,6 +79,12 @@ export default function Sidebar() {
                     show: can('dashboard', 'sales', 'read')
                 },
                 {
+                    name: 'Historial Ventas',
+                    href: '/sales/history', // Corrected path assumption
+                    icon: <ChartBarIcon className="w-5 h-5" />,
+                    show: can('history', 'sales', 'read')
+                },
+                {
                     name: 'Calculadora',
                     href: '/calculator',
                     icon: <CurrencyDollarIcon className="w-5 h-5" />,
@@ -108,12 +119,6 @@ export default function Sidebar() {
                     href: '/analytics',
                     icon: <ChartBarIcon className="w-5 h-5" />,
                     show: can('perf', 'stats', 'read')
-                },
-                {
-                    name: 'Historial Ventas',
-                    href: '/sales',
-                    icon: <FileText className="w-5 h-5" />,
-                    show: can('history', 'sales', 'read')
                 },
                 {
                     name: 'Finanzas',
@@ -168,47 +173,62 @@ export default function Sidebar() {
     ], [can]);
 
     return (
-        <aside className="fixed left-0 top-0 bottom-0 w-60 bg-white dark:bg-slate-900 border-r border-gray-300 dark:border-slate-800 z-[100] flex flex-col transition-colors duration-300">
-            {/* HERDER */}
-            <div className="p-6 border-b border-gray-100/50 dark:border-slate-800/50 mb-2">
-                <div className="flex items-center gap-4">
+        <aside className={`fixed left-0 top-0 bottom-0 ${isCollapsed ? 'w-20' : 'w-60'} bg-white dark:bg-slate-900 border-r border-gray-300 dark:border-slate-800 z-[100] flex flex-col transition-all duration-300`}>
+            {/* HEADER */}
+            <div className={`flex items-center ${isCollapsed ? 'justify-center p-4' : 'px-6 py-6'} border-b border-gray-100/50 dark:border-slate-800/50 mb-2 transition-all`}>
+                <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-4'} relative`}>
                     <div className="bg-blue-600 w-10 h-10 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/20 shrink-0">
                         <CpuChipIcon className="w-6 h-6 text-white" />
                     </div>
-                    <div className="flex flex-col justify-center">
-                        <h1 className="text-xl font-extrabold text-gray-900 dark:text-white leading-none tracking-tight">NEXUS OS</h1>
-                        <p className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-[0.15em] mt-1">SISTEMA ATÓMICO</p>
-                    </div>
+                    {!isCollapsed && (
+                        <div className="flex flex-col justify-center animate-in fade-in duration-300">
+                            <h1 className="text-xl font-extrabold text-gray-900 dark:text-white leading-none tracking-tight">NEXUS OS</h1>
+                            <p className="text-[9px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-[0.15em] mt-1 relative">
+                                SISTEMA ATÓMICO
+                            </p>
+                        </div>
+                    )}
                 </div>
             </div>
 
+            {/* TOGGLE BUTTON */}
+            <button
+                onClick={onToggle}
+                className="absolute -right-3 top-20 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-full p-1 shadow-md hover:bg-gray-50 focus:outline-none z-50 text-gray-500"
+            >
+                {isCollapsed ? <ChevronRightIcon className="w-3 h-3" /> : <ChevronRightIcon className="w-3 h-3 rotate-180" />}
+            </button>
+
+
             {/* SCROLLABLE NAV */}
-            <div className="flex-1 flex flex-col min-h-0 overflow-y-auto px-3 py-2 space-y-4">
+            <div className={`flex-1 flex flex-col min-h-0 overflow-y-auto ${isCollapsed ? 'px-2' : 'px-3'} py-2 space-y-4`}>
                 {structure.map((section) => {
                     const visibleItems = section.items.filter(i => i.show);
-                    if (visibleItems.length === 0) return null; // INVISIBILITY RULE
+                    if (visibleItems.length === 0) return null;
 
-                    const isCollapsed = collapsed[section.key];
+                    const isSectionCollapsed = sectionCollapsed[section.key];
 
                     return (
                         <div key={section.key} className="space-y-1">
                             {/* SECTION HEADER */}
-                            <button
-                                onClick={() => toggleSection(section.key)}
-                                className="w-full flex items-center justify-between px-2 py-1 group focus:outline-none"
-                            >
-                                <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest group-hover:text-blue-600 transition-colors">
-                                    {section.title}
-                                </p>
-                                {isCollapsed ? (
-                                    <ChevronRightIcon className="w-3 h-3 text-gray-400" />
-                                ) : (
-                                    <ChevronDownIcon className="w-3 h-3 text-gray-400" />
-                                )}
-                            </button>
+                            {!isCollapsed && (
+                                <button
+                                    onClick={() => toggleSection(section.key)}
+                                    className="w-full flex items-center justify-between px-2 py-1 group focus:outline-none"
+                                >
+                                    <p className="text-[10px] font-bold text-gray-400 dark:text-slate-500 uppercase tracking-widest group-hover:text-blue-600 transition-colors">
+                                        {section.title}
+                                    </p>
+                                    {isSectionCollapsed ? (
+                                        <ChevronRightIcon className="w-3 h-3 text-gray-400" />
+                                    ) : (
+                                        <ChevronDownIcon className="w-3 h-3 text-gray-400" />
+                                    )}
+                                </button>
+                            )}
 
                             {/* ITEMS */}
-                            {!isCollapsed && (
+                            {(!isSectionCollapsed || isCollapsed) && (
                                 <div className="space-y-0.5 animate-in slide-in-from-top-1 duration-200">
                                     {visibleItems.map((item) => {
                                         const isActive = pathname === item.href;
@@ -217,16 +237,17 @@ export default function Sidebar() {
                                                 key={item.href}
                                                 href={item.href}
                                                 className={`
-                                                    flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] font-semibold transition-all group
+                                                    flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2 rounded-lg text-[12px] font-semibold transition-all group
                                                     ${isActive
                                                         ? 'bg-blue-50 text-blue-700 dark:bg-slate-800 dark:text-white shadow-sm border border-blue-100 dark:border-slate-700'
                                                         : 'text-gray-600 dark:text-slate-400 hover:bg-gray-50 dark:hover:bg-slate-800 hover:text-gray-900 dark:hover:text-white border border-transparent'}
                                                 `}
+                                                title={isCollapsed ? item.name : ''}
                                             >
                                                 <span className={`${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-slate-500 group-hover:text-gray-600 dark:group-hover:text-slate-300'} transition-colors`}>
                                                     {item.icon}
                                                 </span>
-                                                {item.name}
+                                                {!isCollapsed && <span>{item.name}</span>}
                                             </Link>
                                         );
                                     })}
@@ -238,26 +259,30 @@ export default function Sidebar() {
             </div>
 
             {/* USER FOOTER */}
-            <div className="p-3 border-t border-gray-200 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900/50">
-                <div className="flex items-center gap-3 px-3 py-2.5 bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all cursor-default">
-                    <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-inner">
+            <div className={`p-3 border-t border-gray-200 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-900/50`}>
+                <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-all cursor-default`}>
+                    <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-inner shrink-0">
                         {displayName.charAt(0)}
                     </div>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-bold text-gray-900 dark:text-white truncate uppercase">
-                            {displayName}
-                        </p>
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-gray-100 text-gray-600 uppercase border border-gray-200">
-                            {displayRole}
-                        </span>
-                    </div>
-                    <button
-                        onClick={handleLogout}
-                        title="Cerrar Sesión"
-                        className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-md transition-all"
-                    >
-                        <ArrowRightOnRectangleIcon className="w-5 h-5" />
-                    </button>
+                    {!isCollapsed && (
+                        <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-bold text-gray-900 dark:text-white truncate uppercase">
+                                {displayName}
+                            </p>
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-gray-100 text-gray-600 uppercase border border-gray-200">
+                                {displayRole}
+                            </span>
+                        </div>
+                    )}
+                    {!isCollapsed && (
+                        <button
+                            onClick={handleLogout}
+                            title="Cerrar Sesión"
+                            className="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-md transition-all"
+                        >
+                            <ArrowRightOnRectangleIcon className="w-5 h-5" />
+                        </button>
+                    )}
                 </div>
             </div>
         </aside>
