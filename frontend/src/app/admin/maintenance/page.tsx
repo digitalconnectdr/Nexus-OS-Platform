@@ -1,4 +1,5 @@
 'use client';
+// Force Sync V3
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
@@ -10,12 +11,12 @@ import {
     LockClosedIcon,
     LockOpenIcon,
     ServerIcon,
-    CloudArrowDownIcon,
     ExclamationTriangleIcon,
-    ArrowPathIcon,
-    ArchiveBoxIcon,
     CpuChipIcon,
-    ClipboardDocumentListIcon
+    ClipboardDocumentListIcon,
+    ShieldCheckIcon,
+    ClockIcon,
+    CheckCircleIcon
 } from '@heroicons/react/24/outline';
 import { Switch } from "@/components/ui/switch";
 import {
@@ -28,28 +29,25 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Toaster, toast } from 'sonner';
 
 export default function MaintenancePage() {
     const { session, hasPermission, user } = useAuth();
     const [loading, setLoading] = useState(true);
     const [health, setHealth] = useState<any>(null);
-    const [initialLoadTime, setInitialLoadTime] = useState<number>(0);
-    const [coldStartDetected, setColdStartDetected] = useState(false);
 
     // System Lock State
     const [isSystemLocked, setIsSystemLocked] = useState(false);
     const [isTogglingLock, setIsTogglingLock] = useState(false);
-    const [showLockDialog, setShowLockDialog] = useState(false); // Legacy dialog state
+    const [showLockDialog, setShowLockDialog] = useState(false);
 
     // Batch Delete States
-    const [showDeleteDialog, setShowDeleteDialog] = useState(false); // Legacy dialog state
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
     const [selectedMonth, setSelectedMonth] = useState((new Date().getMonth() + 1).toString());
     const [deleteConfirmWord, setDeleteConfirmWord] = useState('');
-    const [confirmDelete, setConfirmDelete] = useState(false); // Inline confirm state
     const [isDeleting, setIsDeleting] = useState(false);
+    const [recordCount, setRecordCount] = useState<number | null>(null);
+    const [isCounting, setIsCounting] = useState(false);
 
     // Backup & Sockets
     const [isBackingUp, setIsBackingUp] = useState(false);
@@ -66,7 +64,6 @@ export default function MaintenancePage() {
 
     useEffect(() => {
         const checkHealth = async () => {
-            const start = performance.now();
             try {
                 // Parallel fetch for orgs if super admin
                 const [healthData, orgsData] = await Promise.all([
@@ -75,19 +72,13 @@ export default function MaintenancePage() {
                 ]);
 
                 setHealth(healthData);
-                setIsSystemLocked(healthData.locked); // Set system lock status from health data
+                setIsSystemLocked(healthData.locked);
                 if (Array.isArray(orgsData)) {
                     setOrgs(orgsData);
                 }
             } catch (error) {
                 console.error("Health/Orgs Check Failed:", error);
             } finally {
-                const end = performance.now();
-                const duration = end - start;
-                setInitialLoadTime(duration);
-                if (duration > 5000) {
-                    setColdStartDetected(true);
-                }
                 setLoading(false);
             }
         };
@@ -95,7 +86,42 @@ export default function MaintenancePage() {
         if (session) {
             checkHealth();
         }
-    }, [session, hasPermission]); // Added hasPermission to dependency array
+    }, [session, hasPermission]);
+
+    // NEW: Auto-Count Records when filters change
+    useEffect(() => {
+        const countRecords = async () => {
+            // Only count if we have permission to avoid 403 spam
+            if (!hasPermission('system', 'maint', 'delete')) return;
+
+            setIsCounting(true);
+            try {
+                const target = selectedTenant || user?.tenant_id;
+                // Use the new fast endpoint
+                const query = new URLSearchParams({
+                    tenant_id: target,
+                    year: selectedYear,
+                    month: selectedMonth
+                });
+
+                const response = await fetchFromAPI(`/api/v1/maintenance/count-records?${query.toString()}`);
+                setRecordCount(response.count);
+            } catch (error) {
+                console.warn("Count failed", error);
+                setRecordCount(null);
+            } finally {
+                setIsCounting(false);
+            }
+        };
+
+        const timeoutId = setTimeout(() => {
+            if (!loading) countRecords();
+        }, 500); // Debounce
+
+        return () => clearTimeout(timeoutId);
+
+    }, [selectedYear, selectedMonth, selectedTenant, loading, user?.tenant_id, hasPermission]);
+
 
     const handleBatchDelete = async () => {
         if (deleteConfirmWord.toUpperCase() !== 'BORRAR') {
@@ -118,8 +144,9 @@ export default function MaintenancePage() {
 
             if (response.status === 'queued') {
                 toast.success(response.message || "Tarea de borrado iniciada en segundo plano.");
-                setConfirmDelete(false);
                 setDeleteConfirmWord('');
+                // Reset count logically (although async puts it in queue, UI update will lag)
+                setRecordCount(0);
             }
         } catch (error: any) {
             toast.error(error.message || "Error al iniciar borrado.");
@@ -183,16 +210,18 @@ export default function MaintenancePage() {
         }
     };
 
-    const handleToggleLock = async (checked: boolean) => {
+    const handleToggleLock = async () => {
+        // Toggle logic within dialog confirm
         setIsTogglingLock(true);
         try {
             const response = await fetchFromAPI('/api/v1/maintenance/lock', {
                 method: 'POST',
-                body: JSON.stringify({ enabled: checked })
+                body: JSON.stringify({ enabled: !isSystemLocked })
             });
             setIsSystemLocked(response.mode === 'LOCKED');
             if (response.mode === 'LOCKED') toast.warning("SISTEMA BLOQUEADO A NIVEL GLOBAL");
             else toast.success("SISTEMA DESBLOQUEADO");
+            setShowLockDialog(false);
         } catch (error: any) { toast.error("Error al cambiar lock."); }
         finally { setIsTogglingLock(false); }
     };
@@ -200,310 +229,290 @@ export default function MaintenancePage() {
     if (!hasPermission('system', 'maint', 'access')) {
         return (
             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-8">
-                <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mb-4">
-                    <LockClosedIcon className="w-8 h-8 text-amber-500" />
+                <div className="w-24 h-24 bg-slate-900 rounded-3xl flex items-center justify-center mb-6 shadow-2xl">
+                    <LockClosedIcon className="w-10 h-10 text-slate-400" />
                 </div>
-                <h2 className="text-xl font-bold text-gray-900">Acceso Restringido</h2>
-                <p className="text-sm text-gray-500 mt-2">Solo personal autorizado del Cuarto de Máquinas.</p>
+                <h2 className="text-2xl font-black text-slate-900 tracking-tight">ACCESO DENEGADO</h2>
+                <p className="text-sm text-slate-500 mt-2 font-medium">Esta área es exclusiva para Operaciones de Nivel 5.</p>
             </div>
         );
     }
 
-    if (loading) return <LoadingState message="Cargando Consola..." />;
+    if (loading) return <LoadingState message="Inicializando Command Center..." />;
 
     return (
-        <div className="p-6 space-y-8 bg-slate-50/50 min-h-screen">
+        <div className="p-8 space-y-8 bg-slate-50 min-h-screen font-sans">
             <Toaster position="top-right" richColors />
 
-            {/* HEADER */}
+            {/* HEADER V3 */}
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                    <div className="p-3 bg-white rounded-xl border border-slate-200 shadow-sm">
-                        <WrenchScrewdriverIcon className="w-6 h-6 text-indigo-600" />
+                <div className="flex items-center gap-5">
+                    <div className="p-4 bg-slate-900 rounded-2xl shadow-xl shadow-slate-200/50">
+                        <WrenchScrewdriverIcon className="w-8 h-8 text-white" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-black text-slate-900 tracking-tight uppercase">Mantenimiento de Datos</h1>
-                        <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">Herramientas de Consolidación y Resguardo</p>
+                        <h1 className="text-3xl font-black text-slate-900 tracking-tighter uppercase">Command Center</h1>
+                        <p className="text-xs text-slate-500 font-bold uppercase tracking-[0.2em] mt-1">Mantenimiento & Estabilidad</p>
                     </div>
                 </div>
-                <div className={`px-4 py-2 rounded-lg border flex items-center gap-2 ${isSystemLocked ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'}`}>
-                    <div className={`w-2 h-2 rounded-full ${isSystemLocked ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></div>
-                    <span className="text-[10px] font-bold uppercase tracking-widest">{isSystemLocked ? 'SISTEMA BLOQUEADO' : 'OPERACIÓN NORMAL'}</span>
+
+                {/* GLOBAL LOCK STATUS PILL */}
+                <div className={`px-6 py-3 rounded-full border flex items-center gap-3 shadow-sm transition-colors ${isSystemLocked ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                    <div className="relative">
+                        <div className={`w-3 h-3 rounded-full ${isSystemLocked ? 'bg-red-500' : 'bg-emerald-500'}`}></div>
+                        {isSystemLocked && <div className="absolute top-0 left-0 w-3 h-3 rounded-full bg-red-500 animate-ping"></div>}
+                    </div>
+                    <div className="flex flex-col">
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${isSystemLocked ? 'text-red-700' : 'text-emerald-700'}`}>
+                            {isSystemLocked ? 'LOCKDOWN ACTIVO' : 'SISTEMA OPERATIVO'}
+                        </span>
+                        {isSystemLocked && <span className="text-[9px] text-red-500 font-bold">SOLO SUPER-ADMIN</span>}
+                    </div>
+                    <Switch
+                        checked={isSystemLocked}
+                        onCheckedChange={() => setShowLockDialog(true)}
+                        disabled={!hasPermission('system', 'maint', 'lock')}
+                        className="ml-2 data-[state=checked]:bg-red-600"
+                    />
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* COLUMN 1: BATCH OPERATIONS */}
-                <div className="space-y-6">
-                    {/* BATCH DELETE */}
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
-                            <TrashIcon className="w-5 h-5 text-rose-500" />
-                            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-widest">Borrado por Lotes</h3>
-                        </div>
-                        <div className="p-6 space-y-6">
-                            <p className="text-xs text-slate-500 leading-relaxed">
-                                Elimina registros históricos (Ventas) de forma quirúrgica. El proceso es asíncrono y se ejecuta en lotes de 250 para evitar sobrecarga.
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+
+                {/* COL 1: DATA PURGE (ATOMIC RED) */}
+                <div className="xl:col-span-2 space-y-8">
+                    <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden relative group">
+                        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-rose-500 via-red-500 to-orange-500"></div>
+                        <div className="p-8">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="p-2 bg-red-50 rounded-xl">
+                                    <TrashIcon className="w-6 h-6 text-red-600" />
+                                </div>
+                                <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Purgado de Ventas</h3>
+                            </div>
+
+                            <p className="text-sm text-slate-500 font-medium leading-relaxed mb-8 max-w-2xl">
+                                Herramienta de alta precisión para eliminar registros históricos.
+                                <span className="text-red-600 font-bold"> Acción irreversible.</span> Utilizar con extrema precaución.
                             </p>
 
-                            {/* Phase 8: Global Selector */}
-                            {hasPermission('system', 'maint', 'override_tenant') && (
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Organización Objetivo (Opcional)</label>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end bg-slate-50/50 p-6 rounded-3xl border border-slate-100">
+                                {/* Global Selector */}
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Organización</label>
                                     <select
-                                        className="w-full text-xs font-medium p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
+                                        className="w-full text-xs font-bold p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none bg-white shadow-sm"
                                         value={selectedTenant}
                                         onChange={(e) => setSelectedTenant(e.target.value)}
+                                        disabled={!hasPermission('system', 'maint', 'override_tenant')}
                                     >
-                                        <option value="">-- Usar Organización Actual ({user?.tenant_code}) --</option>
+                                        <option value="">Mi Organización ({user?.tenant_code})</option>
                                         {orgs.map(org => (
-                                            <option key={org.id} value={org.id}>{org.name} ({org.slug})</option>
+                                            <option key={org.id} value={org.id}>{org.name}</option>
                                         ))}
                                     </select>
                                 </div>
-                            )}
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Año</label>
-                                    <select
-                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-700"
-                                        value={selectedYear}
-                                        onChange={(e) => setSelectedYear(e.target.value)}
-                                    >
-                                        <option value="2024">2024</option>
-                                        <option value="2025">2025</option>
-                                        <option value="2026">2026</option>
-                                    </select>
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Período</label>
+                                    <div className="flex gap-2">
+                                        <select
+                                            className="w-1/3 p-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm bg-white"
+                                            value={selectedYear}
+                                            onChange={(e) => setSelectedYear(e.target.value)}
+                                        >
+                                            <option value="2024">2024</option>
+                                            <option value="2025">2025</option>
+                                            <option value="2026">2026</option>
+                                        </select>
+                                        <select
+                                            className="w-2/3 p-3 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 shadow-sm bg-white"
+                                            value={selectedMonth}
+                                            onChange={(e) => setSelectedMonth(e.target.value)}
+                                        >
+                                            {Array.from({ length: 12 }, (_, i) => (
+                                                <option key={i + 1} value={(i + 1).toString()}>
+                                                    {new Date(0, i).toLocaleString('es-ES', { month: 'long' }).toUpperCase()}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Mes</label>
-                                    <select
-                                        className="w-full p-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-700"
-                                        value={selectedMonth}
-                                        onChange={(e) => setSelectedMonth(e.target.value)}
-                                    >
-                                        {Array.from({ length: 12 }, (_, i) => (
-                                            <option key={i + 1} value={(i + 1).toString()}>
-                                                {new Date(0, i).toLocaleString('es-ES', { month: 'long' }).charAt(0).toUpperCase() + new Date(0, i).toLocaleString('es-ES', { month: 'long' }).slice(1)}
-                                            </option>
-                                        ))}
-                                    </select>
+
+                                {/* RECORD PREVIEW */}
+                                <div className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl shadow-sm h-full">
+                                    <div>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Registros Detectados</span>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            {isCounting ? (
+                                                <div className="h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+                                            ) : (
+                                                <span className={`text-xl font-black tracking-tight ${recordCount === 0 ? 'text-slate-300' : 'text-slate-800'}`}>
+                                                    {recordCount !== null ? recordCount.toLocaleString() : '-'}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className={`w-2 h-2 rounded-full ${recordCount && recordCount > 0 ? 'bg-green-500' : 'bg-slate-300'}`}></div>
                                 </div>
                             </div>
 
-                            {confirmDelete ? (
-                                <div className="animate-in fade-in slide-in-from-top-2 space-y-4 pt-4 border-t border-slate-100">
-                                    <div className="p-3 bg-red-50 border border-red-100 rounded text-[10px] text-red-800 font-medium flex items-start gap-2">
-                                        <ExclamationTriangleIcon className="w-4 h-4 text-red-600 shrink-0" />
-                                        Esta acción es irreversible. Escribe "BORRAR" para confirmar.
-                                    </div>
+                            {/* Confirmation Area */}
+                            <div className="mt-8 pt-8 border-t border-slate-100">
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-4">Confirmación de Seguridad</p>
+                                <div className="flex gap-4">
                                     <Input
                                         value={deleteConfirmWord}
                                         onChange={(e) => setDeleteConfirmWord(e.target.value)}
-                                        placeholder="Escribe BORRAR"
-                                        className="text-xs uppercase font-bold tracking-widest border-red-200 focus:border-red-500 focus:ring-red-200"
+                                        placeholder="ESCRIBE 'BORRAR'"
+                                        className="uppercase font-black tracking-widest border-2 border-red-100 focus:border-red-500 focus:ring-red-200 bg-red-50/30 h-12 text-center rounded-xl max-w-xs"
                                     />
-                                    <div className="flex gap-2">
-                                        <Button variant="outline" size="sm" onClick={() => setConfirmDelete(false)} className="w-full text-[10px] font-bold uppercase">Cancelar</Button>
-                                        <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={handleBatchDelete}
-                                            disabled={isDeleting || deleteConfirmWord.toUpperCase() !== 'BORRAR' || !hasPermission('system', 'maint', 'delete')}
-                                            className="w-full bg-red-600 hover:bg-red-700 text-[10px] font-bold uppercase"
-                                        >
-                                            {isDeleting ? 'Borrando...' : 'Confirmar Borrado'}
-                                        </Button>
-                                    </div>
+                                    <Button
+                                        variant="destructive"
+                                        onClick={handleBatchDelete}
+                                        disabled={isDeleting || deleteConfirmWord.toUpperCase() !== 'BORRAR' || (recordCount === 0)}
+                                        className="h-12 px-8 bg-red-600 hover:bg-red-700 font-bold uppercase tracking-widest rounded-xl shadow-lg shadow-red-500/30 flex-1 transition-all"
+                                    >
+                                        {isDeleting ? 'Eliminando...' : 'Ejecutar Borrado'}
+                                    </Button>
                                 </div>
-                            ) : (
-                                <Button
-                                    variant="destructive"
-                                    className="w-full bg-red-600 hover:bg-red-700 font-bold uppercase tracking-wider text-[10px]"
-                                    onClick={() => setConfirmDelete(true)}
-                                    disabled={!hasPermission('system', 'maint', 'delete')}
-                                >
-                                    <TrashIcon className="w-4 h-4 mr-2" />
-                                    Iniciar Purgado de Datos
-                                </Button>
-                            )}
+                                {recordCount === 0 && (
+                                    <p className="text-[10px] text-center mt-3 text-slate-400 font-medium">No hay registros para borrar en este período.</p>
+                                )}
+                            </div>
                         </div>
                     </div>
+                </div>
 
-                    {/* Phase 8: AUDIT LOG PURGE */}
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
-                            <ClipboardDocumentListIcon className="w-5 h-5 text-amber-500" />
-                            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-widest">Limpieza de Logs de Auditoría</h3>
+                {/* COL 2: TOOLS & AUDIT */}
+                <div className="space-y-8">
+
+                    {/* TURBO OPTIMIZER (EMERALD) */}
+                    <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden p-8 relative">
+                        <div className="absolute top-0 left-0 w-full h-1.5 bg-emerald-500"></div>
+                        <div className="flex justify-between items-start mb-6">
+                            <div className="p-2 bg-emerald-50 rounded-xl">
+                                <CpuChipIcon className="w-6 h-6 text-emerald-600" />
+                            </div>
+                            {isReindexing && <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full animate-pulse">EN PROCESO</span>}
                         </div>
-                        <div className="p-6 space-y-6">
-                            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg flex gap-3 items-start">
-                                <ExclamationTriangleIcon className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                                <div>
-                                    <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wide">⚠️ ADVERTENCIA CRÍTICA</p>
-                                    <p className="text-[10px] text-amber-700 mt-1">
-                                        Asegúrese de haber descargado sus reportes trimestrales antes de proceder. Esta acción es irreversible y eliminará la evidencia histórica de operaciones.
-                                    </p>
-                                </div>
-                            </div>
+                        <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-2">Turbo Optimizer</h3>
+                        <p className="text-xs text-slate-500 font-medium mb-6">Reconstruye índices b-tree corruptos para acelerar consultas.</p>
 
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Antigüedad a Conservar</label>
-                                <select
-                                    className="w-full text-xs font-medium p-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white"
-                                    value={auditRetention}
-                                    onChange={(e) => setAuditRetention(e.target.value)}
-                                    disabled={!hasPermission('system', 'maint', 'purge_audit')}
-                                >
-                                    <option value="3m">Borrar anteriores a 3 Meses</option>
-                                    <option value="6m">Borrar anteriores a 6 Meses</option>
-                                    <option value="1y">Borrar anteriores a 1 Año</option>
-                                </select>
-                            </div>
+                        <Button
+                            className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold uppercase tracking-widest rounded-xl shadow-lg shadow-emerald-500/30 h-12"
+                            onClick={handleReindex}
+                            disabled={isReindexing}
+                        >
+                            {isReindexing ? 'Optimizando...' : 'Iniciar Reindex'}
+                        </Button>
+                    </div>
 
+                    {/* SOCKET PURGE (AMBER) */}
+                    <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden p-8 relative">
+                        <div className="absolute top-0 left-0 w-full h-1.5 bg-amber-500"></div>
+                        <div className="flex justify-between items-start mb-6">
+                            <div className="p-2 bg-amber-50 rounded-xl">
+                                <ServerIcon className="w-6 h-6 text-amber-600" />
+                            </div>
+                        </div>
+                        <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-2">Conexiones Fantasma</h3>
+                        <p className="text-xs text-slate-500 font-medium mb-6">Elimina sockets 'idle' que saturan el pool de Supabase.</p>
+
+                        <Button
+                            variant="outline"
+                            className="w-full border-amber-200 text-amber-700 hover:bg-amber-50 font-bold uppercase tracking-widest rounded-xl h-12"
+                            onClick={handlePurgeSockets}
+                        >
+                            Purgar Sockets
+                        </Button>
+                    </div>
+
+                    {/* AUDIT LOG (INDIGO) */}
+                    <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden p-8 relative">
+                        <div className="absolute top-0 left-0 w-full h-1.5 bg-indigo-500"></div>
+                        <div className="flex justify-between items-start mb-6">
+                            <div className="p-2 bg-indigo-50 rounded-xl">
+                                <ClipboardDocumentListIcon className="w-6 h-6 text-indigo-600" />
+                            </div>
+                        </div>
+                        <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight mb-2">Auditoría</h3>
+                        <div className="flex items-center gap-2 mb-6">
+                            <select
+                                className="w-full text-xs font-bold p-2 border border-slate-200 rounded-lg text-slate-600 outline-none"
+                                value={auditRetention}
+                                onChange={(e) => setAuditRetention(e.target.value)}
+                            >
+                                <option value="3m">3 Meses</option>
+                                <option value="6m">6 Meses</option>
+                                <option value="1y">1 Año</option>
+                            </select>
                             <Button
+                                size="sm"
                                 variant="outline"
-                                className="w-full border-amber-200 text-amber-700 hover:bg-amber-50 font-bold uppercase tracking-wider text-[10px]"
+                                className="border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-bold"
                                 onClick={() => setShowPurgeConfirm(true)}
-                                disabled={isPurgingAudit || !hasPermission('system', 'maint', 'purge_audit')}
                             >
-                                {isPurgingAudit ? 'Limpiando...' : 'Iniciar Limpieza de Auditoría'}
+                                Limpiar
                             </Button>
                         </div>
                     </div>
                 </div>
-
-                {/* COLUMN 2: SYSTEM LOCK & TOOLS */}
-                <div className="space-y-6">
-                    {/* GLOBAL LOCK */}
-                    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <div className={`p-3 rounded-xl ${isSystemLocked ? 'bg-red-100' : 'bg-slate-100'}`}>
-                                <LockClosedIcon className={`w-6 h-6 ${isSystemLocked ? 'text-red-600' : 'text-slate-400'}`} />
-                            </div>
-                            <div>
-                                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">Bloqueo Global del Sistema</h3>
-                                <p className="text-[10px] text-slate-500 mt-1 max-w-xs">
-                                    Si se activa, solo los Super Administradores podrán acceder a la plataforma. Ideal para migraciones críticas.
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <Switch
-                                checked={isSystemLocked}
-                                onCheckedChange={handleToggleLock}
-                                disabled={isTogglingLock || !hasPermission('system', 'maint', 'lock')}
-                                className={isSystemLocked ? "data-[state=checked]:bg-red-600" : ""}
-                            />
-                            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                                {isSystemLocked ? 'ACTIVO' : 'INACTIVO'}
-                            </span>
-                        </div>
-                    </div>
-
-                    {/* OPTIMIZATION TOOLS */}
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                        <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-widest">Herramientas de Optimización</h3>
-                        </div>
-                        <div className="p-6 grid grid-cols-2 gap-4">
-                            <Button
-                                variant="outline"
-                                className="h-20 flex flex-col gap-2 border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all"
-                                onClick={handleBackup}
-                                disabled={isBackingUp || !hasPermission('system', 'maint', 'backup')}
-                            >
-                                <ArchiveBoxIcon className="w-6 h-6 text-indigo-500" />
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-600">Backup JSON</span>
-                            </Button>
-
-                            <Button
-                                variant="outline"
-                                className="h-20 flex flex-col gap-2 border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all"
-                                onClick={handlePurgeSockets}
-                            >
-                                <ServerIcon className="w-6 h-6 text-amber-500" />
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-600">Purgar Sockets</span>
-                            </Button>
-
-                            {/* Phase 8: TURBO BUTTON */}
-                            <Button
-                                variant="outline"
-                                className="h-20 flex flex-col gap-2 border-slate-200 hover:bg-emerald-50 hover:border-emerald-300 transition-all col-span-2"
-                                onClick={handleReindex}
-                                disabled={isReindexing || !hasPermission('system', 'maint', 'reindex')}
-                            >
-                                <CpuChipIcon className={`w-6 h-6 text-emerald-500 ${isReindexing ? 'animate-spin' : ''}`} />
-                                <span className="text-[10px] font-bold uppercase tracking-widest text-slate-600">
-                                    {isReindexing ? 'Optimizando...' : 'Optimizar Índices (Turbo)'}
-                                </span>
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-
             </div>
 
-            {/* DELETE CONFIRMATION DIALOG */}
-            <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-                <DialogContent className="sm:max-w-md">
+            {/* AUDIT WARNING MODAL */}
+            <Dialog open={showPurgeConfirm} onOpenChange={setShowPurgeConfirm}>
+                <DialogContent className="sm:max-w-md bg-white rounded-3xl border-0 shadow-2xl">
                     <DialogHeader>
-                        <DialogTitle className="text-red-600 font-black uppercase tracking-tight flex items-center gap-2">
-                            <ExclamationTriangleIcon className="w-5 h-5" /> Confirmar Borrado de Datos
+                        <DialogTitle className="text-amber-600 font-black uppercase tracking-tight flex items-center gap-2 text-xl">
+                            <ExclamationTriangleIcon className="w-8 h-8" /> Atención Requerida
                         </DialogTitle>
-                        <DialogDescription className="text-slate-600 text-xs font-medium">
-                            Se eliminarán TODOS los registros de ventas para el período {selectedMonth}/{selectedYear}. Esta acción es irreversible.
+                        <DialogDescription className="text-slate-600 font-medium pt-2 text-sm leading-relaxed">
+                            Está a punto de eliminar logs de auditoría.
+                            <br /><br />
+                            <span className="font-bold text-slate-900 block mb-1">⚠️ Asegúrese de haber descargado sus reportes trimestrales antes de proceder.</span>
+                            La evidencia de operaciones antiguas será eliminada permanentemente.
                         </DialogDescription>
                     </DialogHeader>
-
-                    <div className="space-y-4 py-4">
-                        <div className="p-3 bg-red-50 border border-red-100 rounded text-[10px] text-red-800">
-                            Para evitar errores, escribe la palabra: <span className="font-black">BORRAR</span>
-                        </div>
-                        <Input
-                            value={deleteConfirmWord}
-                            onChange={(e) => setDeleteConfirmWord(e.target.value)}
-                            className="uppercase font-mono text-xs tracking-wider"
-                            placeholder="ESCRIBE AQUÍ"
-                        />
-                    </div>
-
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowDeleteDialog(false)} className="text-xs font-bold uppercase tracking-widest">Cancelar</Button>
+                    <DialogFooter className="mt-6 gap-2">
+                        <Button variant="outline" onClick={() => setShowPurgeConfirm(false)} className="rounded-xl px-6 font-bold text-xs uppercase tracking-widest border-slate-200">
+                            Cancelar
+                        </Button>
                         <Button
-                            variant="destructive"
-                            onClick={handleBatchDelete}
-                            disabled={isDeleting || deleteConfirmWord.toUpperCase() !== 'BORRAR'}
-                            className="bg-red-600 hover:bg-red-700 text-xs font-bold uppercase tracking-widest"
+                            className="bg-amber-500 hover:bg-amber-600 text-white rounded-xl px-6 font-bold text-xs uppercase tracking-widest shadow-lg shadow-amber-500/20"
+                            onClick={handleAuditPurge}
+                            disabled={isPurgingAudit}
                         >
-                            {isDeleting ? 'Procesando...' : 'Confirmar Borrado'}
+                            {isPurgingAudit ? 'Procesando...' : 'Entendido, Eliminar'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
-            {/* LOCK CONFIRMATION DIALOG */}
+            {/* LOCK DIALOG */}
             <Dialog open={showLockDialog} onOpenChange={setShowLockDialog}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="sm:max-w-md bg-white rounded-3xl border-0 shadow-2xl">
                     <DialogHeader>
-                        <DialogTitle className="font-black uppercase tracking-tight">
-                            {isSystemLocked ? 'Desactivar Bloqueo de Sistema' : 'Activar Bloqueo de Sistema'}
+                        <DialogTitle className={`font-black uppercase tracking-tight flex items-center gap-2 text-xl ${isSystemLocked ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {isSystemLocked ? <LockOpenIcon className="w-6 h-6" /> : <LockClosedIcon className="w-6 h-6" />}
+                            {isSystemLocked ? 'Restaurar Acceso' : 'Bloqueo Total'}
                         </DialogTitle>
-                        <DialogDescription className="text-slate-600 text-xs font-medium">
+                        <DialogDescription className="text-slate-600 font-medium pt-2 text-sm leading-relaxed">
                             {isSystemLocked
-                                ? 'El sistema volverá a estar disponible para todos los usuarios autorizados.'
-                                : 'ADVERTENCIA: Todos los usuarios (excepto Super Admins) verán una pantalla de mantenimiento y no podrán operar.'}
+                                ? 'El sistema volverá a estar disponible para todos los usuarios. ¿Confirmar apertura?'
+                                : 'Se bloqueará el acceso a TODOS los usuarios excepto Super Admins. Use esto solo en emergencias.'}
                         </DialogDescription>
                     </DialogHeader>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowLockDialog(false)} className="text-xs font-bold uppercase tracking-widest">Atrás</Button>
+                    <DialogFooter className="mt-6 gap-2">
+                        <Button variant="outline" onClick={() => setShowLockDialog(false)} className="rounded-xl px-6 font-bold text-xs uppercase tracking-widest border-slate-200">
+                            Cancelar
+                        </Button>
                         <Button
-                            className={`text-xs font-bold uppercase tracking-widest ${!isSystemLocked ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
-                            onClick={() => handleToggleLock(!isSystemLocked)}
+                            className={`rounded-xl px-6 font-bold text-xs uppercase tracking-widest shadow-lg ${isSystemLocked ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20' : 'bg-red-600 hover:bg-red-700 shadow-red-500/20'}`}
+                            onClick={handleToggleLock}
                             disabled={isTogglingLock}
                         >
-                            {isTogglingLock ? 'Cambiando...' : (isSystemLocked ? 'Restaurar Sistema' : 'Confirmar Bloqueo')}
+                            {isTogglingLock ? 'Procesando...' : 'Confirmar Acción'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

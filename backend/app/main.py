@@ -6,6 +6,8 @@ import logging
 from app.core.database import engine, Base
 from app.core.config import settings
 
+print("FORCE DEPLOY V3 - COMMIT HASH VERIFICATION")
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,

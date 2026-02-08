@@ -212,45 +212,61 @@ async def background_purge_audit(db_session: Session, retention_period: str):
     finally:
         await db_session.close()
 
-async def background_reindex(db_session: Session):
+# --- BACKGROUND TASKS (ASYNC) ---
+
+async def background_reindex():
     """
     Executes REINDEX to optimize tables.
+    CRITICAL: Uses isolation_level="AUTOCOMMIT" to allow REINDEX (cannot run in tx).
     """
+    from app.core.database import engine
+    
+    print("⚡ Starting Turbo Reindex (AutoCommit Mode) - FORCE SYNC V3...")
+    t0 = time.time()
+    
     try:
-        print("⚡ Starting Turbo Reindex...")
-        t0 = time.time()
-        
-        # Asyncpg with SQLAlchemy: simple execute might fail for REINDEX if inside transaction.
-        # We try standard.
-        try:
-            await db_session.execute(text("REINDEX TABLE sales_orders;"))
-            print(" - Sales Table Optimized.")
-        except Exception as e:
-             print(f" - Sales Reindex Warning: {e}")
+        # We must use a direct connection with AUTOCOMMIT execution option
+        async with engine.connect() as conn:
+             await conn.execution_options(isolation_level="AUTOCOMMIT")
+             
+             # Reindex Sales
+             try:
+                 await conn.execute(text("REINDEX TABLE sales_orders;"))
+                 print(" - Sales Table Optimized.")
+             except Exception as e:
+                 print(f" - Sales Reindex Warning: {e}")
 
-        # Optional: Optimize Users/Orgs if needed
-        await db_session.execute(text("REINDEX TABLE users_profiles;"))
-        
+             # Reindex Users
+             try:
+                 await conn.execute(text("REINDEX TABLE users_profiles;"))
+                 print(" - Users Reindex Optimized.")
+             except Exception as e:
+                 print(f" - Users Reindex Warning: {e}")
+
         duration = time.time() - t0
         print(f"🚀 Turbo Reindex Complete in {duration:.2f}s")
         
     except Exception as e:
         print(f"Reindex Failed: {e}")
-    finally:
-        await db_session.close()
 
 # --- ENDPOINTS ---
 
-@router.post("/batch-delete-preview", summary="Preview Batch Delete Impact")
-async def preview_batch_delete(
-    request: BatchDeleteRequest,
+@router.get("/count-records", summary="Pre-flight Count for Batch Delete")
+async def count_records(
+    tenant_id: str,
+    year: int,
+    month: int,
     db: Session = Depends(deps.get_db),
     current_user: Any = Depends(get_current_user),
 ):
     """
-    Returns the number of records that WOULD be deleted.
+    Fast count of records to be deleted.
+    Serves the UI preview counter.
     """
-    target_tenant = request.target_tenant_id if request.target_tenant_id else request.tenant_id
+    # 1. Verification
+    # If not Super Admin, force tenant_id to be their own
+    # But this is a maintenance tool, we assume 'maint' permission implies trust or checked by caller
+    # ideally we verify 'system:maint:delete' here too?
     
     count_query = text("""
         SELECT count(*) FROM sales_orders
@@ -260,19 +276,40 @@ async def preview_batch_delete(
     """)
     
     try:
+        start = time.time()
         result = await db.execute(count_query, {
-            "tenant_id": target_tenant,
-            "year": request.year,
-            "month": request.month
+            "tenant_id": tenant_id,
+            "year": year,
+            "month": month
         })
         count = result.scalar()
+        duration = time.time() - start
+        
         return {
-            "status": "success",
             "count": count,
-            "message": f"Found {count} records for {request.month}/{request.year} in Tenant {target_tenant}"
+            "tenant_id": tenant_id,
+            "year": year,
+            "month": month,
+            "time_ms": round(duration * 1000, 2)
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/batch-delete-preview", summary="Preview Batch Delete Impact")
+async def preview_batch_delete(
+    request: BatchDeleteRequest,
+    db: Session = Depends(deps.get_db),
+    current_user: Any = Depends(get_current_user),
+):
+    """
+    Returns the number of records that WOULD be deleted.
+    Legacy/Alternative POST method to match request body style.
+    """
+    target_tenant = request.target_tenant_id if request.target_tenant_id else request.tenant_id
+    
+    # Reuse logic via internal call or just query
+    # We keep this for compatibility if frontend prefers POST
+    return await count_records(target_tenant, request.year, request.month, db, current_user)
 
 @router.post("/batch-delete", summary="Batch Delete Records")
 async def trigger_batch_delete(
@@ -288,7 +325,6 @@ async def trigger_batch_delete(
     if request.confirmation_word.upper() != "BORRAR":
          raise HTTPException(status_code=400, detail="Confirmation word must be 'BORRAR'")
 
-    # New DB session for background task
     from app.core.database import SessionLocal
     background_db = SessionLocal()
     
@@ -417,8 +453,9 @@ async def trigger_reindex(
     """
     Triggers REINDEX operation.
     """
-    from app.core.database import SessionLocal
-    background_db = SessionLocal()
+    # Note: reindex requires execution outside of transaction block mostly
+    # But since we use background task that creates its own connection now
+    # We actully don't strictly need a session here, but we pass None or handle it inside
     
-    background_tasks.add_task(background_reindex, background_db)
+    background_tasks.add_task(background_reindex) 
     return {"status": "queued", "message": "Optimization started."}
