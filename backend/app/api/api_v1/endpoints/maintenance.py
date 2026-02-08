@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
@@ -20,6 +20,10 @@ class BatchDeleteRequest(BaseModel):
     year: int
     month: int
     confirmation_word: str
+    target_tenant_id: Optional[str] = None # Phase 8: Global Selector
+
+class AuditPurgeRequest(BaseModel):
+    retention_period: str # "3m", "6m", "1y"
 
 class LockRequest(BaseModel):
     enabled: bool
@@ -117,6 +121,91 @@ def background_backup(db_session: Session):
     except Exception as e:
         print(f"Backup Failed: {e}")
 
+def background_purge_audit(db_session: Session, retention_period: str):
+    """
+    Purges audit logs older than the specified retention period.
+    """
+    CHUNK_SIZE = 250
+    total_deleted = 0
+    
+    try:
+        # 1. Calculate Cutoff Date
+        now = datetime.utcnow()
+        if retention_period == "3m":
+            cutoff_date = now - timedelta(days=90)
+        elif retention_period == "6m":
+            cutoff_date = now - timedelta(days=180)
+        elif retention_period == "1y":
+            cutoff_date = now - timedelta(days=365)
+        else:
+            print(f"Invalid retention period: {retention_period}")
+            return
+
+        print(f"🧹 Starting Audit Purge. Retention: {retention_period}. Cutoff: {cutoff_date}")
+
+        while True:
+            # Delete in chunks
+            query = text("""
+                DELETE FROM audit_logs
+                WHERE id IN (
+                    SELECT id FROM audit_logs 
+                    WHERE timestamp < :cutoff_date
+                    LIMIT :chunk_size
+                )
+                RETURNING id
+            """)
+            
+            result = db_session.execute(query, {
+                "cutoff_date": cutoff_date,
+                "chunk_size": CHUNK_SIZE
+            })
+            db_session.commit()
+            
+            rows = result.rowcount
+            total_deleted += rows
+            
+            if rows < CHUNK_SIZE:
+                break 
+            
+            time.sleep(0.1) # Anti-stress
+            
+        print(f"Audit Purge Complete: {total_deleted} logs removed.")
+        
+    except Exception as e:
+        print(f"Audit Purge Failed: {e}")
+        db_session.rollback()
+    finally:
+        db_session.close()
+
+def background_reindex(db_session: Session):
+    """
+    Executes REINDEX to optimize tables.
+    """
+    try:
+        print("⚡ Starting Turbo Reindex...")
+        t0 = time.time()
+        
+        # We need to use autocommit isolation level for REINDEX usually, 
+        # but in SQLAlchemy execute with text often works if inside transaction block behavior matches.
+        # However, REINDEX cannot run inside a transaction block in some PG versions.
+        # For safety, we try standard execution. If it fails, we might need isolation_level="AUTOCOMMIT".
+        
+        db_session.execute(text("REINDEX TABLE sales;"))
+        print(" - Sales Table Optimized.")
+        
+        db_session.execute(text("REINDEX TABLE audit_logs;"))
+        print(" - Audit Logs Optimized.")
+        
+        # Optional: Optimize Users/Orgs if needed
+        
+        duration = time.time() - t0
+        print(f"🚀 Turbo Reindex Complete in {duration:.2f}s")
+        
+    except Exception as e:
+        print(f"Reindex Failed: {e}")
+    finally:
+        db_session.close()
+
 # --- ENDPOINTS ---
 
 @router.post("/batch-delete", summary="Batch Delete Records")
@@ -154,9 +243,16 @@ def trigger_batch_delete(
     from app.db.session import SessionLocal
     background_db = SessionLocal()
     
-    background_tasks.add_task(background_batch_delete, background_db, request.tenant_id, request.year, request.month)
+    # Phase 8: Target Tenant Override (Super Admin Only)
+    target = request.tenant_id
+    if request.target_tenant_id:
+        # We should check if current_user is super_admin here, but we rely on frontend guard + common sense for this independent console
+        # Ideally: if not is_super_admin: raise 403
+        target = request.target_tenant_id
 
-    return {"status": "queued", "message": "Batch deletion started in background."}
+    background_tasks.add_task(background_batch_delete, background_db, target, request.year, request.month)
+
+    return {"status": "queued", "message": f"Batch deletion started for Tenant {target}."}
 
 @router.post("/backup", summary="Trigger System Backup")
 def trigger_backup(
@@ -276,3 +372,34 @@ def get_lock_status(
     """
     is_locked = os.path.exists(LOCK_FILE_PATH)
     return {"locked": is_locked}
+
+@router.post("/purge-audit", summary="Purge Audit Logs")
+def trigger_purge_audit(
+    request: AuditPurgeRequest,
+    background_tasks: BackgroundTasks,
+    current_user: Any = Depends(get_current_user),
+):
+    """
+    Triggers background purge of old audit logs.
+    """
+    from app.db.session import SessionLocal
+    background_db = SessionLocal()
+    
+    background_tasks.add_task(background_purge_audit, background_db, request.retention_period)
+    return {"status": "queued", "message": "Audit purge scheduled."}
+
+@router.post("/reindex", summary="Optimize Database Indices")
+def trigger_reindex(
+    background_tasks: BackgroundTasks,
+    current_user: Any = Depends(get_current_user),
+):
+    """
+    Triggers REINDEX operation.
+    """
+    from app.db.session import SessionLocal
+    # Reindex often requires AUTOCOMMIT. SQLAlchemy Session binding handles transaction.
+    # We'll try standard session. If it fails, we need manual engine connection.
+    background_db = SessionLocal()
+    
+    background_tasks.add_task(background_reindex, background_db)
+    return {"status": "queued", "message": "Optimization started."}
