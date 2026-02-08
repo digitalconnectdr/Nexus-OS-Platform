@@ -55,8 +55,8 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                 console.warn("🚫 Access denied to /config");
                 router.push('/');
             }
-            else if (pathname.startsWith('/sales/history') && !hasPermission('history', 'sales', 'read')) {
-                console.warn("🚫 Access denied to /sales/history");
+            else if (pathname.startsWith('/sales') && !hasPermission('history', 'sales', 'read')) {
+                console.warn("🚫 Access denied to /sales");
                 router.push('/');
             }
             else if (pathname.startsWith('/calculator') && !hasPermission('dashboard', 'calculator', 'access')) {

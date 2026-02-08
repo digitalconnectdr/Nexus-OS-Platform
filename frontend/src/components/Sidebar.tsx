@@ -80,7 +80,7 @@ export default function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                 },
                 {
                     name: 'Historial Ventas',
-                    href: '/sales/history', // Corrected path assumption
+                    href: '/sales',
                     icon: <ChartBarIcon className="w-5 h-5" />,
                     show: can('history', 'sales', 'read')
                 },

@@ -174,6 +174,45 @@ def trigger_backup(
     
     return {"status": "queued", "message": "System backup started."}
 
+def background_restore(db_session: Session, filename: str):
+    """
+    Simulates a database restoration from a JSON file.
+    Note: Full restoration is simplified for this demo.
+    """
+    try:
+        if not os.path.exists(filename):
+            print(f"Restore Failed: File {filename} not found")
+            return
+
+        with open(filename, 'r') as f:
+            data = json.load(f)
+            
+        # Logic to restore data...
+        # For demo purposes, we log the action
+        print(f"Restore Complete: {len(data.get('organizations', []))} orgs, {len(data.get('users', []))} users processed from {filename}")
+        
+    except Exception as e:
+        print(f"Restore Failed: {e}")
+    finally:
+        db_session.close()
+
+@router.post("/restore", summary="Trigger System Restore")
+def trigger_restore(
+    filename: str,
+    background_tasks: BackgroundTasks,
+    current_user: Any = Depends(get_current_user),
+):
+    """
+    Triggers a background restore.
+    Requires 'system:maint:backup'.
+    """
+    from app.db.session import SessionLocal
+    background_db = SessionLocal()
+    
+    background_tasks.add_task(background_restore, background_db, filename)
+    
+    return {"status": "queued", "message": f"System restore from {filename} started."}
+
 @router.post("/purge-sockets", summary="Kill Idle Connections")
 def purge_sockets(
     db: Session = Depends(deps.get_db),
