@@ -378,16 +378,17 @@ async def purge_sockets(
     """
     Terminates all IDLE connections to the database.
     Requires 'system:maint:sockets'.
+    Safe Mode: Only kills connections owned by the current db user.
     """
     try:
         # Logic to kill idle connections
-        # We exclude our own pid
+        # We exclude our own pid and restrict to current user to avoid permission errors
         query = text("""
             SELECT pg_terminate_backend(pid)
             FROM pg_stat_activity
             WHERE state = 'idle'
+            AND usename = current_user
             AND pid <> pg_backend_pid()
-            AND datname = current_database()
         """)
         
         result = await db.execute(query)

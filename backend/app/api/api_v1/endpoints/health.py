@@ -36,14 +36,13 @@ async def get_system_health(
     end_time = datetime.now()
     db_latency_ms = (end_time - start_time).total_seconds() * 1000
 
-    # 2. Active Connections (Supavisor / PgBouncer Friendly)
-    # We want meaningful connections, filtering out idle/internal
+    # 2. Total Connections (Pool Utilization)
+    # We want to know total occupancy, not just active query runners
     try:
         active_conn_query = text("""
             SELECT count(*) 
             FROM pg_stat_activity 
-            WHERE state = 'active' 
-            AND pid <> pg_backend_pid()
+            WHERE datname = current_database()
         """)
         # Using .scalar() on async result requires .scalars().first() pattern or await execute -> .scalar()
         result = await db.execute(active_conn_query)
