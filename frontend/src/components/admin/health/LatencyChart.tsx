@@ -48,7 +48,8 @@ export default function LatencyChart() {
 
         const start = performance.now();
         try {
-            const res = await fetch('/api/v1/health/system', {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const res = await fetch(`${API_URL}/api/v1/health/system`, {
                 headers: {
                     'Authorization': `Bearer ${session.access_token}`
                 }
