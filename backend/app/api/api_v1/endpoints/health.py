@@ -15,7 +15,7 @@ from app.models.core import Organization
 router = APIRouter()
 
 class KillSwitchRequest(BaseModel):
-    confirmation_name: str
+    confirmation_id: str
 
 @router.get("/system", summary="System Health & Telemetry")
 async def get_system_health(
@@ -26,6 +26,13 @@ async def get_system_health(
     Get real-time system health metrics, including active agents for the current tenant.
     Requires 'system:health:read' permission.
     """
+    # 0. Get Org Info for UI (Tracking ID)
+    from sqlalchemy import select
+    stmt = select(Organization).where(Organization.id == current_user.tenant_id)
+    org_res = await db.execute(stmt)
+    org = org_res.scalars().first()
+    tracking_id = org.tracking_id if org else "UNKNOWN"
+
     # 1. Database Latency & Connection Test
     start_time = datetime.now()
     try:
@@ -65,7 +72,7 @@ async def get_system_health(
         """)
         result = await db.execute(agent_query, {"tenant_id": current_user.tenant_id})
         active_agents = result.scalar() or 0
-        print(f"DEBUG: Agentes detectados: {active_agents} for tenant {current_user.tenant_id}")
+        # Debug log removed for production
     except Exception as e:
         # Fallback: Just count total users as "Authorized Agents"
         print(f"Telemetry Warning: Could not count active agents: {e}")
@@ -87,6 +94,9 @@ async def get_system_health(
     return {
         "status": "online",
         "timestamp": datetime.now().isoformat(),
+        "organization": {
+            "tracking_id": tracking_id
+        },
         "database": {
             "status": db_status,
             "latency_ms": round(db_latency_ms, 2),
@@ -109,11 +119,10 @@ async def execute_kill_switch(
     """
     Kill Switch: Revokes ALL sessions for the current tenant.
     Requires 'system:security:killswitch'.
-    Double confirmation required (Organization Name).
+    Double confirmation required (Organization Tracking ID).
     """
     
-    # 2. Get Organization Name for Confirmation
-    # Use select() for async ORM or execute(select())
+    # 2. Get Organization for Confirmation
     from sqlalchemy import select
     
     # Needs to be async compatible query
@@ -124,8 +133,8 @@ async def execute_kill_switch(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    if request.confirmation_name.strip() != org.name.strip():
-        raise HTTPException(status_code=400, detail="Confirmation name does not match organization name.")
+    if request.confirmation_id.strip() != org.tracking_id.strip():
+        raise HTTPException(status_code=400, detail="Confirmation ID does not match Organization Tracking ID.")
 
     # 3. Execute Kill Switch (Surgical)
     try:

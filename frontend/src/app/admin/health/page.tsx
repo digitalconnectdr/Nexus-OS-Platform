@@ -12,6 +12,7 @@ import {
     BoltIcon, // Using Bolt for "Health/Status"
     ArchiveBoxIcon, // Using ArchiveBox for storage/disk
     CpuChipIcon, // Using CpuChip for memory/processing
+    InformationCircleIcon,
     UserGroupIcon
 } from '@heroicons/react/24/outline';
 import {
@@ -20,7 +21,8 @@ import {
     Database,
     Activity,
     Lock,
-    Skull
+    Skull,
+    Info
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -30,6 +32,9 @@ import { Toaster, toast } from 'sonner';
 interface SystemHealth {
     status: string;
     timestamp: string;
+    organization: {
+        tracking_id: string;
+    };
     database: {
         status: string;
         latency_ms: number;
@@ -52,7 +57,7 @@ export default function HealthPage() {
 
     // Kill Switch State
     const [showKillSwitch, setShowKillSwitch] = useState(false);
-    const [confirmOrgName, setConfirmOrgName] = useState('');
+    const [confirmTrackingId, setConfirmTrackingId] = useState('');
     const [isKilling, setIsKilling] = useState(false);
 
     useEffect(() => {
@@ -80,13 +85,13 @@ export default function HealthPage() {
     }, [session]);
 
     const handleKillSwitch = async () => {
-        if (!user?.tenant_name) {
-            toast.error("No se pudo identificar la organización actual.");
+        if (!health?.organization.tracking_id) {
+            toast.error("Error validando ID de organización.");
             return;
         }
 
-        if (confirmOrgName.trim() !== user.tenant_name.trim()) {
-            toast.error("El nombre de la organización no coincide.");
+        if (confirmTrackingId.trim() !== health.organization.tracking_id.trim()) {
+            toast.error("El ID de Rastreo no coincide.");
             return;
         }
 
@@ -94,13 +99,13 @@ export default function HealthPage() {
         try {
             const response = await fetchFromAPI('/api/v1/health/kill-switch', {
                 method: 'POST',
-                body: JSON.stringify({ confirmation_name: confirmOrgName })
+                body: JSON.stringify({ confirmation_id: confirmTrackingId })
             });
 
             if (response.status === 'success') {
                 toast.success(response.message);
                 setShowKillSwitch(false);
-                setConfirmOrgName('');
+                setConfirmTrackingId('');
                 // Refresh metrics
                 const data = await fetchFromAPI('/api/v1/health/system');
                 setHealth(data);
@@ -178,8 +183,16 @@ export default function HealthPage() {
                     </div>
                 </div>
 
-                {/* ACTIVE CONNECTIONS */}
-                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between h-32">
+                {/* ACTIVE CONNECTIONS - WITH TOOLTIP */}
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between h-32 relative group">
+                    <div className="absolute top-2 right-2">
+                        <div className="relative group/tooltip">
+                            <InformationCircleIcon className="w-4 h-4 text-slate-300 hover:text-blue-500 cursor-help transition-colors" />
+                            <div className="absolute top-full right-0 mt-2 w-48 p-2 bg-slate-800 text-white text-[10px] rounded-lg shadow-xl opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 font-medium">
+                                Representa el uso actual de sockets en el Pooler de Supabase.
+                            </div>
+                        </div>
+                    </div>
                     <div className="flex justify-between items-start">
                         <div className="p-2 bg-blue-50 rounded-lg">
                             <SignalIcon className="w-5 h-5 text-blue-600" />
@@ -304,14 +317,18 @@ export default function HealthPage() {
                     </DialogHeader>
 
                     <div className="space-y-4 py-4">
-                        <div className="p-3 bg-red-50 border border-red-100 rounded text-[10px] text-red-800">
-                            Para confirmar, escribe el nombre de la organización: <span className="font-black select-all">{user?.tenant_name}</span>
+                        <div className="p-3 bg-red-50 border border-red-100 rounded text-[10px] text-red-800 break-all">
+                            Para confirmar, copie e ingrese el <span className="font-bold">ID de Rastreo</span>:
+                            <br />
+                            <span className="font-black font-mono text-xs select-all bg-white px-2 py-0.5 rounded border border-red-200 mt-1 block w-fit">
+                                {health?.organization.tracking_id}
+                            </span>
                         </div>
                         <Input
-                            value={confirmOrgName}
-                            onChange={(e) => setConfirmOrgName(e.target.value)}
-                            className="uppercase font-mono text-xs tracking-wider"
-                            placeholder="NOMBRE DE LA ORGANIZACIÓN"
+                            value={confirmTrackingId}
+                            onChange={(e) => setConfirmTrackingId(e.target.value)}
+                            className="font-mono text-xs tracking-wider"
+                            placeholder="INGRESE ID DE RASTREO (UUID)"
                         />
                     </div>
 
@@ -320,7 +337,7 @@ export default function HealthPage() {
                         <Button
                             variant="destructive"
                             onClick={handleKillSwitch}
-                            disabled={isKilling || confirmOrgName.trim() !== user?.tenant_name?.trim()}
+                            disabled={isKilling || confirmTrackingId.trim() !== health?.organization.tracking_id.trim()}
                             className="bg-red-600 hover:bg-red-700 text-xs font-bold uppercase tracking-widest"
                         >
                             {isKilling ? 'Ejecutando...' : 'Confirmar Expulsión'}

@@ -51,6 +51,7 @@ export default function MaintenancePage() {
 
     // Backup & Sockets
     const [isBackingUp, setIsBackingUp] = useState(false);
+    const [isPurgingSockets, setIsPurgingSockets] = useState(false);
 
     // Phase 8: Data Management
     const [orgs, setOrgs] = useState<any[]>([]);
@@ -202,11 +203,14 @@ export default function MaintenancePage() {
     };
 
     const handlePurgeSockets = async () => {
+        setIsPurgingSockets(true);
         try {
             await fetchFromAPI('/api/v1/maintenance/purge-sockets', { method: 'POST' });
             toast.success("Conexiones inactivas purgadas.");
         } catch (error: any) {
             toast.error(error.message);
+        } finally {
+            setIsPurgingSockets(false);
         }
     };
 
@@ -423,8 +427,9 @@ export default function MaintenancePage() {
                             variant="outline"
                             className="w-full border-amber-200 text-amber-700 hover:bg-amber-50 font-bold uppercase tracking-widest rounded-xl h-12"
                             onClick={handlePurgeSockets}
+                            disabled={isPurgingSockets}
                         >
-                            Purgar Sockets
+                            {isPurgingSockets ? 'Purgando...' : 'Purgar Sockets'}
                         </Button>
                     </div>
 
@@ -519,5 +524,14 @@ export default function MaintenancePage() {
             </Dialog>
 
         </div>
+    );
+}
+
+// Icon helper
+function LockClosedIcon({ className }: { className?: string }) {
+    return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+            <path fillRule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clipRule="evenodd" />
+        </svg>
     );
 }
