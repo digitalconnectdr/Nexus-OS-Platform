@@ -20,7 +20,8 @@ from app.models import *
 from app.api.api_v1.endpoints import (
     auth, users, sales, goals, config, campaigns, products, 
     organizations, statuses, permissions, policies, analytics,
-    campaign_performance, finance, selectors, ops, tournaments
+    campaign_performance, finance, selectors, ops, tournaments,
+    health, maintenance
 )
 
 # --- IMPORTACIÓN QUIRÚRGICA (BYPASS DE EMERGENCIA) ---
@@ -173,6 +174,8 @@ app.include_router(campaign_performance.router, prefix="/api/v1/campaign-perform
 app.include_router(finance.router, prefix="/api/v1/finance", tags=["finance"])
 app.include_router(selectors.router, prefix="/api/v1/selectors", tags=["selectors"])
 app.include_router(ops.router, prefix="/api/v1/ops", tags=["ops"])
+app.include_router(health.router, prefix="/api/v1/health", tags=["health"])
+app.include_router(maintenance.router, prefix="/api/v1/maintenance", tags=["maintenance"])
 
 # --- INYECCIÓN DIRECTA DE LA RUTA DE RESULTADOS (PRUEBA DEL GRITO) ---
 print("\n" + "="*60)
@@ -211,13 +214,10 @@ def read_root():
 @app.on_event("startup")
 async def startup_event():
     print("\n" + "="*20 + " MAPA DE RUTAS OFICIAL " + "="*20)
-    found = False
+    # Imprimimos TODAS las rutas para verificar registro correcto
     for route in app.routes:
-        # Buscamos cualquier ruta que contenga 'results'
-        if "results" in getattr(route, "path", ""):
-            print(f"📍 RUTA ACTIVA: {route.path}  --> Métodos: {route.methods}")
-            found = True
+        path = getattr(route, "path", "")
+        if "/api/v1/" in path or "/health" in path:
+            print(f"📍 RUTA ACTIVA: {path}  --> Métodos: {route.methods}")
     
-    if not found:
-        print("❌ NO SE ENCONTRÓ LA RUTA 'results' EN EL MAPA FINAL.")
     print("="*60 + "\n")
