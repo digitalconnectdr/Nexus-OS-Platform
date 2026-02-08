@@ -18,6 +18,7 @@ from app.api.api_v1.endpoints.ops import router as ops_router
 from app.api.api_v1.endpoints.campaign_performance import router as campaign_performance_router
 from app.api.api_v1.endpoints.finance import router as finance_router
 from app.api.api_v1.endpoints.selectors import router as selectors_router
+from app.api.api_v1.endpoints.health import router as health_router
 
 api_router = APIRouter()
 
@@ -39,3 +40,4 @@ api_router.include_router(campaign_performance_router, prefix="/campaign-perform
 api_router.include_router(finance_router, prefix="/finance", tags=["finance"])
 api_router.include_router(selectors_router, prefix="/selectors", tags=["selectors"])
 api_router.include_router(ops_router, prefix="/ops", tags=["ops"])
+api_router.include_router(health_router, prefix="/health", tags=["health"])

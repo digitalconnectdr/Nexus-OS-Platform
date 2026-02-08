@@ -102,6 +102,8 @@ MASTER_CATALOG = [
     ('system', 'orgs', 'delete', 'Eliminar Organizaciones'),
     ('system', 'orgs', 'switcher', 'Cambiar de Organización'),
     ('system', 'orgs', 'license', 'Gestionar Licencias'),
+    ('system', 'health', 'read', 'Ver Salud del Sistema'),
+    ('system', 'security', 'killswitch', 'Kill Switch (Expulsión Masiva)'),
 
     # --- BLOQUE 8: RESERVAS TÉCNICAS (20) ---
     ('technical', 'reserve', '01', 'Reserva Técnica 01'),
