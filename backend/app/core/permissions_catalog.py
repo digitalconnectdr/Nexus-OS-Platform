@@ -104,6 +104,11 @@ MASTER_CATALOG = [
     ('system', 'orgs', 'license', 'Gestionar Licencias'),
     ('system', 'health', 'read', 'Ver Salud del Sistema'),
     ('system', 'security', 'killswitch', 'Kill Switch (Expulsión Masiva)'),
+    ('system', 'maint', 'access', 'Acceso a Consola de Mantenimiento'),
+    ('system', 'maint', 'delete', 'Ejecutar Borrado por Lotes'),
+    ('system', 'maint', 'backup', 'Ejecutar Respaldo de Base de Datos'),
+    ('system', 'maint', 'lock', 'Control de Bloqueo Global'),
+    ('system', 'maint', 'sockets', 'Purgar Conexiones de Base de Datos'),
 
     # --- BLOQUE 8: RESERVAS TÉCNICAS (20) ---
     ('technical', 'reserve', '01', 'Reserva Técnica 01'),

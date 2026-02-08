@@ -13,6 +13,9 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     const router = useRouter();
     const { user, session, isLoading, hasPermission } = useAuth();
     const [isOffline, setIsOffline] = useState(false);
+    const [isSystemLocked, setIsSystemLocked] = useState(false);
+
+    const isSuperAdmin = user?.role?.toLowerCase() === 'super_admin' || user?.is_super_admin;
 
     const isPublicRoute = pathname === '/login';
 
@@ -62,6 +65,27 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
             }
         }
     }, [pathname, session, isLoading, router, hasPermission]);
+
+    // --- GLOBAL MAINTENANCE LOCK POLLING ---
+    useEffect(() => {
+        if (!session || isPublicRoute) return;
+
+        const checkLockStatus = async () => {
+            try {
+                const response = await fetch('/api/v1/maintenance/lock-status');
+                if (response.ok) {
+                    const data = await response.json();
+                    setIsSystemLocked(data.locked);
+                }
+            } catch (error) {
+                console.error("Lock status polling failed:", error);
+            }
+        };
+
+        checkLockStatus();
+        const interval = setInterval(checkLockStatus, 60000); // Check every minute
+        return () => clearInterval(interval);
+    }, [session, isPublicRoute]);
 
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
     const showSidebar = !!session && !isPublicRoute;
@@ -122,25 +146,39 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
 
             {isOffline && (
                 <div className="fixed inset-0 z-[9999] bg-white/40 backdrop-blur-md flex items-center justify-center cursor-not-allowed animate-fade-in px-4">
-                    <div className="bg-white p-8 rounded-2xl shadow-2xl border border-red-100 text-center max-w-sm w-full transform transition-all animate-scale-in">
-                        <div className="mb-6 flex justify-center">
-                            <div className="p-4 bg-red-50 rounded-full animate-pulse">
-                                <svg className="w-12 h-12 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 5.636a9 9 0 010 12.728m0 0l-2.829-2.829m2.829 2.829L21 21M15.536 8.464a5 5 0 010 7.072m0 0l-2.829-2.829m-4.243 2.829a4.978 4.978 0 01-1.414-2.83m-1.414 5.658a9 9 0 01-2.167-9.238m7.824 2.167a1 1 0 111.414 1.414m-1.414-1.414L3 3m8.293 8.293l1.414 1.414" />
+                    {/* ... offline content ... */}
+                </div>
+            )}
+
+            {/* GLOBAL MAINTENANCE LOCK OVERLAY */}
+            {isSystemLocked && !isSuperAdmin && !isPublicRoute && (
+                <div className="fixed inset-0 z-[99999] bg-slate-950/90 backdrop-blur-xl flex items-center justify-center px-4 overflow-hidden">
+                    <div className="max-w-md w-full text-center space-y-8 animate-in fade-in zoom-in duration-500">
+                        <div className="relative inline-block">
+                            <div className="absolute inset-0 bg-amber-500 rounded-full blur-3xl opacity-20 animate-pulse"></div>
+                            <div className="relative p-6 bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl">
+                                <svg className="w-16 h-16 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                 </svg>
                             </div>
                         </div>
-                        <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tight">Conexión Interrumpida</h3>
-                        <p className="text-[11px] font-bold text-gray-500 mb-6 uppercase leading-relaxed opacity-70 tracking-wide">
-                            Hemos pausado la interfaz para proteger la integridad operacional. El sistema se reactivará automáticamente al detectar señal.
-                        </p>
 
-                        <button
-                            onClick={() => window.location.href = '/login'}
-                            className="text-[10px] font-black text-red-600 hover:text-red-700 uppercase tracking-[0.2em] cursor-pointer pointer-events-auto transition-colors border-b border-red-100 pb-1"
-                        >
-                            Salir del sistema
-                        </button>
+                        <div className="space-y-3">
+                            <h2 className="text-3xl font-black text-white uppercase tracking-tight">Sistema en Mantenimiento</h2>
+                            <p className="text-slate-400 text-sm font-medium leading-relaxed">
+                                Estamos realizando una consolidación técnica de datos. <br />
+                                <span className="text-amber-500/80 font-bold uppercase tracking-widest text-[10px] mt-2 block">Cierre de operaciones temporal</span>
+                            </p>
+                        </div>
+
+                        <div className="pt-4 border-t border-slate-800/50">
+                            <button
+                                onClick={() => window.location.href = '/login'}
+                                className="px-6 py-2 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold uppercase tracking-widest hover:bg-slate-700 hover:text-white transition-all"
+                            >
+                                Salir del Sistema
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
