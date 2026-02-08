@@ -167,6 +167,18 @@ export default function Sidebar({ isCollapsed, onToggle }: SidebarProps) {
                     href: '/admin/audit',
                     icon: <FileText className="w-5 h-5" />,
                     show: can('system', 'audit', 'read')
+                },
+                {
+                    name: 'Estado Salud',
+                    href: '/admin/health',
+                    icon: <Activity className="w-5 h-5 text-green-500" />,
+                    show: can('system', 'health', 'read')
+                },
+                {
+                    name: 'Mantenimiento',
+                    href: '/admin/maintenance',
+                    icon: <CpuChipIcon className="w-5 h-5 text-amber-500" />,
+                    show: can('system', 'maint', 'access')
                 }
             ]
         }

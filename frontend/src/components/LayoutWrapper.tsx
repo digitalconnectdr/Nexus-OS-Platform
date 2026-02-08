@@ -43,8 +43,16 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                 console.warn("🚫 Access denied to /admin/organizations");
                 router.push('/');
             }
-            else if (pathname.startsWith('/admin/permissions') && !hasPermission('permissions', 'permissions', 'view_tab')) {
+            else if (pathname.startsWith('/admin/permissions') && !hasPermission('system', 'matrix', 'read')) {
                 console.warn("🚫 Access denied to /admin/permissions");
+                router.push('/');
+            }
+            else if (pathname.startsWith('/admin/health') && !hasPermission('system', 'health', 'read')) {
+                console.warn("🚫 Access denied to /admin/health");
+                router.push('/');
+            }
+            else if (pathname.startsWith('/admin/maintenance') && !hasPermission('system', 'maint', 'access')) {
+                console.warn("🚫 Access denied to /admin/maintenance");
                 router.push('/');
             }
             else if (pathname.startsWith('/analytics/financial') && !hasPermission('finance', 'finance', 'read')) {
