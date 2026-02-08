@@ -305,40 +305,43 @@ export default function HealthPage() {
 
             {/* CONFIRMATION DIALOG */}
             <Dialog open={showKillSwitch} onOpenChange={setShowKillSwitch}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="sm:max-w-md bg-white rounded-[2.5rem] border-0 shadow-2xl p-8">
                     <DialogHeader>
-                        <DialogTitle className="text-red-600 font-black uppercase tracking-tight flex items-center gap-2">
-                            <AlertTriangle className="w-5 h-5" /> Confirmar Expulsión Masiva
+                        <DialogTitle className="text-red-600 font-black uppercase tracking-tight flex items-center gap-2 text-xl">
+                            <AlertTriangle className="w-6 h-6" /> Confirmar Expulsión Masiva
                         </DialogTitle>
-                        <DialogDescription className="text-slate-600 text-xs font-medium">
+                        <DialogDescription className="text-slate-600 font-medium pt-2 text-sm leading-relaxed">
                             Esta acción cerrará la sesión de <span className="font-bold">{health?.database.active_agents} agentes</span>.
-                            Deberán volver a ingresar sus credenciales para acceder.
+                            Deberán volver a ingresar sus credenciales.
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4 py-4">
-                        <div className="p-3 bg-red-50 border border-red-100 rounded text-[10px] text-red-800 break-all">
-                            Para confirmar, copie e ingrese el <span className="font-bold">ID de Rastreo</span>:
+                    <div className="space-y-6 py-4">
+                        <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-xs text-red-800 break-all">
+                            Para confirmar, copie el exacto <span className="font-bold">ID de Rastreo</span> de la organización:
                             <br />
-                            <span className="font-black font-mono text-xs select-all bg-white px-2 py-0.5 rounded border border-red-200 mt-1 block w-fit">
+                            <code className="block mt-2 bg-white px-3 py-2 rounded-lg border border-red-200 font-mono text-sm font-bold select-all cursor-text text-red-900 tracking-wider text-center">
                                 {health?.organization.tracking_id}
-                            </span>
+                            </code>
                         </div>
-                        <Input
-                            value={confirmTrackingId}
-                            onChange={(e) => setConfirmTrackingId(e.target.value)}
-                            className="font-mono text-xs tracking-wider"
-                            placeholder="INGRESE ID DE RASTREO (UUID)"
-                        />
+                        <div className="space-y-2">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Pegar ID de Confirmación</label>
+                            <Input
+                                value={confirmTrackingId}
+                                onChange={(e) => setConfirmTrackingId(e.target.value)}
+                                className="font-mono text-sm tracking-wider h-12 rounded-xl border-slate-200 focus:ring-red-500/20 focus:border-red-500 text-center font-bold"
+                                placeholder="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+                            />
+                        </div>
                     </div>
 
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowKillSwitch(false)} className="text-xs font-bold uppercase tracking-widest">Cancelar</Button>
+                    <DialogFooter className="gap-2 sm:gap-0">
+                        <Button variant="outline" onClick={() => setShowKillSwitch(false)} className="rounded-xl px-6 font-bold text-xs uppercase tracking-widest border-slate-200 h-12">Cancelar</Button>
                         <Button
                             variant="destructive"
                             onClick={handleKillSwitch}
                             disabled={isKilling || confirmTrackingId.trim() !== health?.organization.tracking_id.trim()}
-                            className="bg-red-600 hover:bg-red-700 text-xs font-bold uppercase tracking-widest"
+                            className="bg-red-600 hover:bg-red-700 text-white rounded-xl px-6 font-bold text-xs uppercase tracking-widest h-12 shadow-lg shadow-red-500/20"
                         >
                             {isKilling ? 'Ejecutando...' : 'Confirmar Expulsión'}
                         </Button>

@@ -31,7 +31,7 @@ async def get_system_health(
     stmt = select(Organization).where(Organization.id == current_user.tenant_id)
     org_res = await db.execute(stmt)
     org = org_res.scalars().first()
-    tracking_id = org.tracking_id if org else "UNKNOWN"
+    tracking_id = str(org.id) if org else "UNKNOWN"
 
     # 1. Database Latency & Connection Test
     start_time = datetime.now()
@@ -90,7 +90,7 @@ async def get_system_health(
     
     disk = psutil.disk_usage('/')
     disk_usage_percent = disk.percent
-
+    
     return {
         "status": "online",
         "timestamp": datetime.now().isoformat(),
@@ -133,7 +133,7 @@ async def execute_kill_switch(
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
 
-    if request.confirmation_id.strip() != org.tracking_id.strip():
+    if request.confirmation_id.strip() != str(org.id).strip():
         raise HTTPException(status_code=400, detail="Confirmation ID does not match Organization Tracking ID.")
 
     # 3. Execute Kill Switch (Surgical)
