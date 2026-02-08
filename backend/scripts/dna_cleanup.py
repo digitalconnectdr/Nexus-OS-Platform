@@ -38,7 +38,9 @@ CONFIG_PERMS = [
     ('config_hub', 'products', 'update', 'Editar Productos'),
     # Statuses
     ('config_hub', 'statuses', 'create', 'Crear Estatus'),
+    ('config_hub', 'statuses', 'delete', 'Eliminar Estatus'),
     ('config_hub', 'statuses', 'read', 'Ver Estatus'),
+    ('config_hub', 'statuses', 'update', 'Editar Estatus'),
 ]
 
 # 3. Core: Audit + Roles Matrix + USER MANAGEMENT

@@ -127,8 +127,9 @@ def check_permission(resource: str, action: str, module: Optional[str] = None):
         user: UserProfile = Depends(get_current_user), 
         db: AsyncSession = Depends(get_db)
     ):
-        # 1. Master Key: Super Admin Bypass (Immediate & Handled BEFORE logs)
-        if user.is_super_admin:
+        # 1. Master Key: Super Admin Bypass (IMMEDIATE - NO DB HIT)
+        # This is the "God Mode" rule as requested in Phase 2.
+        if user.role == "super_admin" or user.is_super_admin:
             return True
         
         # NORMALIZATION: Ensure role enters lowercase for matching

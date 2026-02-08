@@ -305,9 +305,9 @@ export default function RealTimeTable({
     onPurge?: (id: string) => void
 }) {
     const { can } = usePermission();
-    const canUpdate = can('sales', 'update');
-    const canDelete = can('sales', 'delete');
-    const canChangeStatus = can('sales', 'change_status');
+    const canUpdate = can('dashboard', 'sales', 'update');
+    const canDelete = can('dashboard', 'sales', 'delete');
+    const canChangeStatus = can('dashboard', 'sales', 'change_status');
 
     const [searchTerm, setSearchTerm] = useState("");
     const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");

@@ -154,9 +154,37 @@ export default function PermissionsPage() {
     const groupedMatrix = useMemo(() => {
         const matrix: Record<string, Record<string, Record<string, PermissionEntry>>> = {};
 
+        // HIERARCHICAL INVISIBILITY RULE:
+        // A user (e.g. Administrator) can ONLY see rows where they THEMSELVES have the permission.
+        // If I am 'administrador' and I don't have 'system:audit:read', I cannot see that row at all.
+        // Super Admin sees everything.
+
+        const myRole = user?.role?.toLowerCase() || 'public';
+        const amISuper = isSuperAdmin; // Cached boolean
+
+        const validFuncKeys = new Set<string>();
+
+        // 1. First pass: Identify which permissions *I* have (or if I'm super admin, all)
+        rawPermissions.forEach(p => {
+            const funcKey = `${p.resource}:${p.action}`;
+
+            if (amISuper) {
+                validFuncKeys.add(funcKey);
+            } else {
+                // Check if this permission row belongs to ME and is ALLOWED
+                if (p.role === myRole && p.is_allowed) {
+                    validFuncKeys.add(funcKey);
+                }
+            }
+        });
+
+        // 2. Second pass: Build the matrix only with valid keys
         rawPermissions.forEach(p => {
             const mod = p.module.toLowerCase();
             const funcKey = `${p.resource}:${p.action}`;
+
+            // FILTER: Only show this row if I have access to it
+            if (!validFuncKeys.has(funcKey)) return;
 
             if (!matrix[mod]) matrix[mod] = {};
             if (!matrix[mod][funcKey]) matrix[mod][funcKey] = {};
@@ -165,7 +193,7 @@ export default function PermissionsPage() {
         });
 
         return matrix;
-    }, [rawPermissions]);
+    }, [rawPermissions, user, isSuperAdmin]);
 
     if (loading) return <LoadingState message="Sincronizando Matriz de Funcionalidades..." />;
 

@@ -25,17 +25,31 @@ import { useAuth } from '@/context/AuthContext';
 import { Tooltip } from '@/components/ui/tooltip';
 
 const ROLE_LEVELS: Record<string, number> = {
-    'Super Admin': 100,
-    'Administrador': 90,
-    'Cliente': 85,
-    'Gerente': 80,
-    'Supervisor Senior': 70,
-    'Supervisor': 60,
-    'Dpto Estadistica': 50,
-    'Auditor Calidad': 50,
-    'Seguimiento': 40,
-    'Digitación': 30,
-    'Representante': 10,
+    'super_admin': 100,
+    'administrador': 90,
+    'cliente': 85,
+    'gerente': 80,
+    'supervisor_senior': 70,
+    'supervisor': 60,
+    'dpto_estadistica': 50,
+    'auditor_calidad': 50,
+    'seguimiento': 40,
+    'digitacion': 30,
+    'representante': 10,
+};
+
+const ROLE_LABELS: Record<string, string> = {
+    'super_admin': 'Super Admin',
+    'administrador': 'Administrador',
+    'cliente': 'Cliente',
+    'gerente': 'Gerente',
+    'supervisor_senior': 'Supervisor Senior',
+    'supervisor': 'Supervisor',
+    'dpto_estadistica': 'Dpto Estadistica',
+    'auditor_calidad': 'Auditor Calidad',
+    'seguimiento': 'Seguimiento',
+    'digitacion': 'Digitación',
+    'representante': 'Representante',
 };
 
 const InfoTooltip = ({ text }: { text: string }) => (
@@ -55,7 +69,7 @@ export default function AdminUsersTable() {
     const [error, setError] = useState<string | null>(null);
     const [emailError, setEmailError] = useState<string | null>(null); // New state for email specific error
     const [tenantId, setTenantId] = useState<string | null>(null);
-    const canChangeRole = can('system', 'users', 'update') || can('policies', 'policies', 'update');
+    const canChangeRole = can('system', 'users', 'update') || can('system', 'roles_matrix', 'write');
     const [allProducts, setAllProducts] = useState<any[]>([]);
     const [supervisors, setSupervisors] = useState<any[]>([]);
     const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -394,20 +408,31 @@ export default function AdminUsersTable() {
     const getRoleBadge = (role: string) => {
         const styles: any = {
             'Super Admin': 'bg-red-50 text-red-600 border-red-100',
+            'super_admin': 'bg-red-50 text-red-600 border-red-100',
             'Administrador': 'bg-purple-50 text-purple-600 border-purple-100',
+            'administrador': 'bg-purple-50 text-purple-600 border-purple-100',
             'Gerente': 'bg-indigo-50 text-indigo-600 border-indigo-100',
+            'gerente': 'bg-indigo-50 text-indigo-600 border-indigo-100',
             'Supervisor Senior': 'bg-blue-100 text-blue-700 border-blue-200',
+            'supervisor_senior': 'bg-blue-100 text-blue-700 border-blue-200',
             'Supervisor': 'bg-blue-50 text-blue-600 border-blue-100',
+            'supervisor': 'bg-blue-50 text-blue-600 border-blue-100',
             'Representante': 'bg-emerald-50 text-emerald-600 border-emerald-100',
+            'representante': 'bg-emerald-50 text-emerald-600 border-emerald-100',
             'Auditor Calidad': 'bg-orange-50 text-orange-600 border-orange-100',
+            'auditor_calidad': 'bg-orange-50 text-orange-600 border-orange-100',
             'Cliente': 'bg-slate-50 text-slate-600 border-slate-100',
+            'cliente': 'bg-slate-50 text-slate-600 border-slate-100',
             'Dpto Estadistica': 'bg-cyan-50 text-cyan-600 border-cyan-100',
+            'dpto_estadistica': 'bg-cyan-50 text-cyan-600 border-cyan-100',
             'Seguimiento': 'bg-teal-50 text-teal-600 border-teal-100',
+            'seguimiento': 'bg-teal-50 text-teal-600 border-teal-100',
             'Digitación': 'bg-rose-50 text-rose-600 border-rose-100',
+            'digitacion': 'bg-rose-50 text-rose-600 border-rose-100',
         };
         return (
             <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold uppercase border ${styles[role] || 'bg-gray-50 text-gray-500 border-gray-100'}`}>
-                {role}
+                {ROLE_LABELS[role] || role}
             </span>
         );
     };
@@ -449,7 +474,7 @@ export default function AdminUsersTable() {
                             {(() => {
                                 const targetLevel = ROLE_LEVELS[info.row.original.role] || 0;
                                 const myLevel = ROLE_LEVELS[user?.role || ''] || 0;
-                                const isSuperAdmin = user?.role === 'Super Admin' || user?.is_super_admin;
+                                const isSuperAdmin = user?.role === 'Super Admin' || user?.role === 'super_admin' || user?.is_super_admin;
                                 const canEditUser = isSuperAdmin || (myLevel > targetLevel);
 
                                 return (
@@ -512,7 +537,7 @@ export default function AdminUsersTable() {
                                     <ArrowPathIcon className="w-5 h-5" />
                                 </button>
                             )}
-                            {can('system', 'users', 'update') && (
+                            {can('system', 'users', 'delete') && (
                                 <button
                                     title="Eliminar Permanentemente"
                                     className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-all"
@@ -851,14 +876,12 @@ export default function AdminUsersTable() {
                                         disabled={editingUser && !canChangeRole}
                                         className={`w-full border border-gray-300 rounded-md px-3 h-9 text-xs font-bold focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all uppercase appearance-none cursor-pointer ${editingUser && !canChangeRole ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : 'text-blue-900 bg-white shadow-sm'}`}
                                     >
-                                        {Object.entries(ROLE_LEVELS).map(([roleName, level]) => {
+                                        {Object.entries(ROLE_LEVELS).map(([roleId, level]) => {
                                             const myLevel = ROLE_LEVELS[user?.role || ''] || 0;
-                                            const isSuperAdmin = user?.role === 'Super Admin' || user?.is_super_admin;
+                                            const isSuperAdmin = user?.role === 'super_admin' || user?.is_super_admin;
 
-                                            // Hierarchy rule: Can only assign roles STRICTLY LOWER than own,
-                                            // unless Super Admin.
                                             if (isSuperAdmin || (myLevel > level)) {
-                                                return <option key={roleName} value={roleName}>{roleName}</option>;
+                                                return <option key={roleId} value={roleId}>{ROLE_LABELS[roleId] || roleId}</option>;
                                             }
                                             return null;
                                         })}
@@ -870,8 +893,8 @@ export default function AdminUsersTable() {
                                         required
                                         name="tenant_id"
                                         defaultValue={editingUser?.tenant_id || tenantId || ''}
-                                        disabled={(user?.role || user?.user_metadata?.role)?.trim().toUpperCase() !== 'SUPER ADMIN'}
-                                        className={`w-full border border-gray-300 rounded-md px-3 h-9 text-xs font-bold focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all uppercase appearance-none cursor-pointer ${(user?.role || user?.user_metadata?.role)?.trim().toUpperCase() !== 'SUPER ADMIN' ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : 'text-rose-900 bg-white shadow-sm font-black'}`}
+                                        disabled={!['SUPER ADMIN', 'SUPER_ADMIN'].includes((user?.role || user?.user_metadata?.role || '').trim().toUpperCase())}
+                                        className={`w-full border border-gray-300 rounded-md px-3 h-9 text-xs font-bold focus:border-blue-600 focus:ring-2 focus:ring-blue-100 outline-none transition-all uppercase appearance-none cursor-pointer ${!['SUPER ADMIN', 'SUPER_ADMIN'].includes((user?.role || user?.user_metadata?.role || '').trim().toUpperCase()) ? 'bg-gray-50 text-gray-400 cursor-not-allowed' : 'text-rose-900 bg-white shadow-sm font-black'}`}
                                     >
                                         {organizations.map(org => (
                                             <option key={org.id} value={org.id}>{org.name}</option>
