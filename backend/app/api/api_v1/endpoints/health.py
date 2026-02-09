@@ -95,7 +95,8 @@ async def get_system_health(
         "status": "online",
         "timestamp": datetime.now().isoformat(),
         "organization": {
-            "tracking_id": tracking_id
+            "tracking_id": tracking_id,
+            "name": org.name if org else "UNKNOWN"
         },
         "database": {
             "status": db_status,

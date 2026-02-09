@@ -305,33 +305,51 @@ export default function HealthPage() {
 
             {/* CONFIRMATION DIALOG */}
             <Dialog open={showKillSwitch} onOpenChange={setShowKillSwitch}>
-                <DialogContent className="sm:max-w-md bg-white rounded-[2.5rem] border-0 shadow-2xl p-8">
+                <DialogContent className="sm:max-w-xl bg-white rounded-[2.5rem] border-0 shadow-2xl p-8">
                     <DialogHeader>
                         <DialogTitle className="text-red-600 font-black uppercase tracking-tight flex items-center gap-2 text-xl">
-                            <AlertTriangle className="w-6 h-6" /> Confirmar Expulsión Masiva
+                            <AlertTriangle className="w-8 h-8" /> Confirmar Expulsión Masiva
                         </DialogTitle>
                         <DialogDescription className="text-slate-600 font-medium pt-2 text-sm leading-relaxed">
-                            Esta acción cerrará la sesión de <span className="font-bold">{health?.database.active_agents} agentes</span>.
+                            Esta acción cerrará la sesión de <span className="font-bold text-slate-900">{health?.database.active_agents} agentes</span> conectados actualmente.
                             Deberán volver a ingresar sus credenciales.
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-6 py-4">
-                        <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-xs text-red-800 break-all">
-                            Para confirmar, copie el exacto <span className="font-bold">ID de Rastreo</span> de la organización:
-                            <br />
-                            <code className="block mt-2 bg-white px-3 py-2 rounded-lg border border-red-200 font-mono text-sm font-bold select-all cursor-text text-red-900 tracking-wider text-center">
+                    <div className="space-y-6 py-6">
+                        {/* CURRENT CONTEXT */}
+                        <div className="p-5 bg-slate-50 border border-slate-100 rounded-3xl space-y-3">
+                            <div className="flex flex-col items-center text-center">
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Organización Objetivo</span>
+                                <h4 className="text-lg font-black text-slate-900 uppercase tracking-tight">{health?.organization.name}</h4>
+                            </div>
+                            <div className="relative">
+                                <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                                    <div className="w-full border-t border-slate-200"></div>
+                                </div>
+                                <div className="relative flex justify-center">
+                                    <span className="bg-slate-50 px-2 text-[10px] text-slate-400 font-medium uppercase">ID de Rastreo</span>
+                                </div>
+                            </div>
+                            <code className="block bg-white px-4 py-3 rounded-xl border border-slate-200 font-mono text-sm font-bold select-all cursor-text text-slate-600 tracking-wider text-center shadow-sm">
                                 {health?.organization.tracking_id}
                             </code>
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1">Pegar ID de Confirmación</label>
-                            <Input
-                                value={confirmTrackingId}
-                                onChange={(e) => setConfirmTrackingId(e.target.value)}
-                                className="font-mono text-sm tracking-wider h-12 rounded-xl border-slate-200 focus:ring-red-500/20 focus:border-red-500 text-center font-bold"
-                                placeholder="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
-                            />
+
+                        {/* WARNING & INPUT */}
+                        <div className="space-y-4">
+                            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-xs text-red-800 text-center font-medium">
+                                Para confirmar, copie el <span className="font-bold">ID de Rastreo</span> de arriba y péguelo abajo:
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 block text-center">Pegar ID de Organización</label>
+                                <Input
+                                    value={confirmTrackingId}
+                                    onChange={(e) => setConfirmTrackingId(e.target.value)}
+                                    className="font-mono text-sm tracking-wider h-14 rounded-2xl border-2 border-slate-100 focus:border-red-500 focus:ring-red-100 text-center font-bold text-slate-900"
+                                    placeholder="Pegar UUID aquí..."
+                                />
+                            </div>
                         </div>
                     </div>
 
@@ -341,7 +359,7 @@ export default function HealthPage() {
                             variant="destructive"
                             onClick={handleKillSwitch}
                             disabled={isKilling || confirmTrackingId.trim() !== health?.organization.tracking_id.trim()}
-                            className="bg-red-600 hover:bg-red-700 text-white rounded-xl px-6 font-bold text-xs uppercase tracking-widest h-12 shadow-lg shadow-red-500/20"
+                            className="bg-red-600 hover:bg-red-700 text-white rounded-xl px-8 font-bold text-xs uppercase tracking-widest h-12 shadow-lg shadow-red-500/20 w-full sm:w-auto"
                         >
                             {isKilling ? 'Ejecutando...' : 'Confirmar Expulsión'}
                         </Button>
