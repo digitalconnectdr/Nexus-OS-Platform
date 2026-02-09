@@ -146,6 +146,20 @@ async def execute_kill_switch(
         target_tenant_id = target_org.id
     
     # 3. Execute Kill Switch (Surgical)
+    # Define target name for response
+    target_org_name = "Dynamic Target" 
+    if is_cross_tenant:
+        target_org_name = target_org.name
+    else:
+        # Fetch current org name for completeness if needed, or use user's tenant name logic
+        # For efficiency, we can query it or just rely on the ID.
+        # Let's do a quick fetch to be safe and accurate for the log
+        from sqlalchemy import select
+        stmt = select(Organization).where(Organization.id == current_user.tenant_id)
+        result = await db.execute(stmt)
+        current_org = result.scalars().first()
+        target_org_name = current_org.name if current_org else "Unknown Org"
+
     try:
         # Delete sessions for all users in the TARGET tenant
         # If it's your own tenant, exclude yourself.
@@ -182,7 +196,7 @@ async def execute_kill_switch(
         return {
             "status": "success", 
             "message": f"Kill Switch Executed. {rows_deleted} active sessions revoked.",
-            "organization": org.name
+            "organization": target_org_name
         }
 
     except Exception as e:
