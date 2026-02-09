@@ -123,36 +123,58 @@ async def execute_kill_switch(
     Double confirmation required (Organization Tracking ID).
     """
     
-    # 2. Get Organization for Confirmation
-    from sqlalchemy import select
-    
-    # Needs to be async compatible query
-    stmt = select(Organization).where(Organization.id == current_user.tenant_id)
-    result = await db.execute(stmt)
-    org = result.scalars().first()
-    
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
+    # 2. Determine Target Tenant
+    target_tenant_id = current_user.tenant_id
+    is_cross_tenant = False
 
-    if request.confirmation_id.strip() != str(org.id).strip():
-        raise HTTPException(status_code=400, detail="Confirmation ID does not match Organization Tracking ID.")
-
+    if request.confirmation_id.strip() != str(current_user.tenant_id).strip():
+        # Cross-Tenant Attempt
+        if not current_user.is_super_admin:
+             raise HTTPException(status_code=403, detail="Cross-tenant Kill Switch requires Super Admin privileges.")
+        
+        is_cross_tenant = True
+        
+        # Verify Target Organization Exists
+        from sqlalchemy import select
+        stmt = select(Organization).where(Organization.id == request.confirmation_id)
+        result = await db.execute(stmt)
+        target_org = result.scalars().first()
+        
+        if not target_org:
+             raise HTTPException(status_code=404, detail="Target Organization (UUID) not found.")
+        
+        target_tenant_id = target_org.id
+    
     # 3. Execute Kill Switch (Surgical)
     try:
-        # Delete sessions for all users in this tenant EXCEPT the current user (Super Admin Protection)
-        kill_query = text("""
-            DELETE FROM auth.sessions 
-            WHERE user_id IN (
-                SELECT id FROM public.users_profiles 
-                WHERE tenant_id = :tenant_id
-            )
-            AND user_id != :current_user_id
-        """)
+        # Delete sessions for all users in the TARGET tenant
+        # If it's your own tenant, exclude yourself.
+        # If it's another tenant, delete everyone.
         
-        result = await db.execute(kill_query, {
-            "tenant_id": current_user.tenant_id, 
-            "current_user_id": current_user.id
-        })
+        if is_cross_tenant:
+             kill_query = text("""
+                DELETE FROM auth.sessions 
+                WHERE user_id IN (
+                    SELECT id FROM public.users_profiles 
+                    WHERE tenant_id = :tenant_id
+                )
+            """)
+             params = {"tenant_id": target_tenant_id}
+        else:
+             kill_query = text("""
+                DELETE FROM auth.sessions 
+                WHERE user_id IN (
+                    SELECT id FROM public.users_profiles 
+                    WHERE tenant_id = :tenant_id
+                )
+                AND user_id != :current_user_id
+            """)
+             params = {
+                 "tenant_id": target_tenant_id, 
+                 "current_user_id": current_user.id
+             }
+        
+        result = await db.execute(kill_query, params)
         await db.commit()
         
         rows_deleted = result.rowcount

@@ -338,11 +338,17 @@ export default function HealthPage() {
 
                         {/* WARNING & INPUT */}
                         <div className="space-y-4">
-                            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-xs text-red-800 text-center font-medium">
-                                Para confirmar, copie el <span className="font-bold">ID de Rastreo</span> de arriba y péguelo abajo:
+                            <div className={`p-4 border rounded-2xl text-xs text-center font-medium transition-colors ${confirmTrackingId.trim() === health?.organization.tracking_id.trim()
+                                ? 'bg-red-50 border-red-100 text-red-800'
+                                : (isValidUUID(confirmTrackingId) ? 'bg-amber-50 border-amber-100 text-amber-800' : 'bg-slate-50 border-slate-100 text-slate-500 scale-95 opacity-50')
+                                }`}>
+                                {confirmTrackingId.trim() === health?.organization.tracking_id.trim()
+                                    ? "Para confirmar, copie el ID de Rastreo de arriba y péguelo abajo:"
+                                    : (isValidUUID(confirmTrackingId) ? "⚠️ MODO GLOBAL: Estás apuntando a otra Organización (Super Admin)." : "Ingrese un UUID válido para habilitar.")}
                             </div>
+
                             <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 block text-center">Pegar ID de Organización</label>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest pl-1 block text-center">Pegar ID de Organización (Actual o Global)</label>
                                 <Input
                                     value={confirmTrackingId}
                                     onChange={(e) => setConfirmTrackingId(e.target.value)}
@@ -358,7 +364,7 @@ export default function HealthPage() {
                         <Button
                             variant="destructive"
                             onClick={handleKillSwitch}
-                            disabled={isKilling || confirmTrackingId.trim() !== health?.organization.tracking_id.trim()}
+                            disabled={isKilling || !isValidUUID(confirmTrackingId)}
                             className="bg-red-600 hover:bg-red-700 text-white rounded-xl px-8 font-bold text-xs uppercase tracking-widest h-12 shadow-lg shadow-red-500/20 w-full sm:w-auto"
                         >
                             {isKilling ? 'Ejecutando...' : 'Confirmar Expulsión'}
@@ -366,9 +372,13 @@ export default function HealthPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-
         </div>
     );
+}
+
+function isValidUUID(uuid: string) {
+    const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return regex.test(uuid.trim());
 }
 
 // Icon helper
@@ -379,3 +389,4 @@ function LockClosedIcon({ className }: { className?: string }) {
         </svg>
     );
 }
+
