@@ -499,7 +499,7 @@ export default function MaintenancePage() {
                 <DialogContent className="sm:max-w-md bg-white rounded-3xl border-0 shadow-2xl">
                     <DialogHeader>
                         <DialogTitle className={`font-black uppercase tracking-tight flex items-center gap-2 text-xl ${isSystemLocked ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {isSystemLocked ? <LockOpenIcon className="w-6 h-6" /> : <LockClosedIcon className="w-6 h-6" />}
+                            {isSystemLocked ? <LockOpenIcon className="w-6 h-6" /> : <LockClosedIconSolid className="w-6 h-6" />}
                             {isSystemLocked ? 'Restaurar Acceso' : 'Bloqueo Total'}
                         </DialogTitle>
                         <DialogDescription className="text-slate-600 font-medium pt-2 text-sm leading-relaxed">
@@ -528,7 +528,7 @@ export default function MaintenancePage() {
 }
 
 // Icon helper
-function LockClosedIcon({ className }: { className?: string }) {
+function LockClosedIconSolid({ className }: { className?: string }) {
     return (
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
             <path fillRule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clipRule="evenodd" />
