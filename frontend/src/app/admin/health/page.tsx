@@ -90,8 +90,8 @@ export default function HealthPage() {
             return;
         }
 
-        if (confirmTrackingId.trim() !== health.organization.tracking_id.trim()) {
-            toast.error("El ID de Rastreo no coincide.");
+        if (!isValidUUID(confirmTrackingId)) {
+            toast.error("El ID de Rastreo no es válido.");
             return;
         }
 
