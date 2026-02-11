@@ -64,7 +64,8 @@ async def list_permissions(
     
     # --- REGLA DE JERARQUÍA: VISIBILIDAD LIMITADA ---
     # Normalización agresiva para evitar "fantasmas" (Super Admin vs super_admin)
-    current_role_norm = str(current_user.role).lower().replace(" ", "_")
+    from app.schemas.user_schemas import UserRole
+    current_role_norm = UserRole.normalize(str(current_user.role))
     
     if not current_user.is_super_admin:
         # Si no soy Super Admin, solo puedo ver los permisos asignados a mi propio rol.
@@ -108,7 +109,8 @@ async def toggle_status(
     # [SIMULATED SECURITY CHECK]
     # In this dev phase, we assume the requester is the admin
     
-    clean_role = toggle.target_role
+    from app.schemas.user_schemas import UserRole
+    clean_role = UserRole.normalize(toggle.target_role)
     clean_module = toggle.module.lower() if toggle.module else None
     clean_resource = toggle.resource.lower()
     clean_action = toggle.action.lower()
@@ -117,7 +119,7 @@ async def toggle_status(
     
     # CRITICAL FIX: Lookup by Unique Constraint (Role + Resource + Action + Tenant)
     filters = [
-        RolePermission.role == clean_role.lower(),
+        RolePermission.role == clean_role,
         func.lower(RolePermission.resource) == clean_resource,
         func.lower(RolePermission.action) == clean_action,
         RolePermission.tenant_id == current_user.tenant_id

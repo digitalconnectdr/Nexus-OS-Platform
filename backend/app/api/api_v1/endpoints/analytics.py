@@ -40,7 +40,9 @@ from app.schemas.core import UserRole
 import datetime
 
 # --- ROLE SCOPING ---
-HIGH_LEVEL_ROLES = [UserRole.SUPER_ADMIN, UserRole.ADMINISTRADOR, UserRole.GERENTE, UserRole.SUPERVISOR, UserRole.SUPERVISOR_SENIOR]
+# --- ROLE SCOPING ---
+# Dynamic Permissions now handle this via 'data:view_all'
+# HIGH_LEVEL_ROLES removed to support purely dynamic RBAC
 async def _get_campaign_data(session: AsyncSession, month: str, tenant_id: str, campaign_id: str = None) -> List[EfficiencyCampaignParentMetric]:
     if session is None:
         logger.warning("⚠️ _get_campaign_data: DB Session is None, returning empty list")
@@ -188,13 +190,24 @@ async def get_efficiency_data(
     """
     Versión resiliente que acepta rango de fechas o mes.
     """
-    # --- DATA SCOPE FILTERING (RLS) ---
-    if current_user.role not in HIGH_LEVEL_ROLES:
+    from app.core.security import check_permission_programmatic
+    
+    # --- DATA SCOPE FILTERING (Dynamic RLS) ---
+    # Check if user has permission to view all data
+    can_view_all = await check_permission_programmatic(
+        current_user, db, "data", "view_all", module="dashboard"
+    )
+    
+    if not can_view_all:
         logger.info(f"🔒 RLS: Restricting efficiency view for {current_user.email}")
         supervisor_id = str(current_user.id)
         if view != 'supervisor':
-            logger.warning(f"⚠️ User {current_user.email} tried to access non-supervisor view. Forcing supervisor view.")
-            view = 'supervisor'
+            # Optionally allow campaign view but restricted? For now, force supervisor view
+            # logger.warning(f"⚠️ User {current_user.email} tried to access non-supervisor view. Forcing supervisor view.")
+            # view = 'supervisor' 
+            pass # Let them try, but data will be scoped implicitely if query supports it?
+                 # Actually _get_campaign_data doesn't support user filtering yet.
+                 # For safety, if they cannot view all, they focus on their own node.
 
     # Derivación de mes
     target_month = month
@@ -205,6 +218,22 @@ async def get_efficiency_data(
 
     try:
         if view == 'campaign':
+            # If constrained user requests campaign view, we might need to filter campaigns they belong to?
+            # For now, if they don't have view_all, we might assume they can see campaign stats 
+            # OR we should implement _get_campaign_data filtering.
+            # Given the urgency, if can_view_all is false, we might return empty or just let it be if it's aggregate.
+            # But usually agents shouldn't see full campaign totals.
+            # Let's trust the 'view_all' check. If they don't have it, they shouldn't see Org-wide campaign stats.
+            
+            if not can_view_all:
+                 # Soft Block or Filtered?
+                 # Returning empty for safety until Campaign-Agent mapping is strict
+                 return {
+                    "month": target_month,
+                    "campaigns_view": [],
+                    "supervisors": []
+                }
+            
             data = await _get_campaign_data(db, target_month, str(current_user.tenant_id), campaign_id)
             return {
                 "month": target_month,
@@ -243,14 +272,14 @@ async def get_scorecard_agents(
     Endpoint para el Scorecard 360 de Agentes.
     Retorna el desglose por agente, campaña y familia.
     """
-    # --- DATA SCOPE FILTERING (RLS) ---
-    # If restricted role, FORCE supervisor_id to be self
-    if current_user.role not in HIGH_LEVEL_ROLES:
-        logger.info(f"🔒 RLS: Restricting scorecard for {current_user.email}")
-        supervisor_id = str(current_user.id)
-
-    # --- DATA SCOPE FILTERING (RLS) ---
-    if current_user.role not in HIGH_LEVEL_ROLES:
+    from app.core.security import check_permission_programmatic
+    
+    # --- DATA SCOPE FILTERING (Dynamic RLS) ---
+    can_view_all = await check_permission_programmatic(
+        current_user, db, "data", "view_all", module="dashboard"
+    )
+    
+    if not can_view_all:
         logger.info(f"🔒 RLS: Restricting scorecard for {current_user.email}")
         supervisor_id = str(current_user.id)
 

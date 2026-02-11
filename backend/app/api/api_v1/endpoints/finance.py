@@ -19,7 +19,8 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # --- ROLE SCOPING ---
-HIGH_LEVEL_ROLES = [UserRole.SUPER_ADMIN, UserRole.ADMINISTRADOR, UserRole.GERENTE, UserRole.SUPERVISOR, UserRole.SUPERVISOR_SENIOR]
+# Dynamic Permissions now handle this via 'data:view_all'
+# HIGH_LEVEL_ROLES removed to support purely dynamic RBAC
 
 # --- BUSINESS RULES HELPERS ---
 
@@ -273,11 +274,13 @@ async def get_campaign_revenue_share(
     end_date: str = Query(..., description="YYYY-MM-DD"),
     status: Optional[str] = Query(None),
     current_user: UserProfile = Depends(get_current_user),
+    db: AsyncSession = Depends(deps.get_db), # Added for Permission Check
     _: bool = Depends(check_permission("finance", "summary", module="finance"))
 ):
     """
     Distribución de ingresos por campaña.
     """
+    from app.core.security import check_permission_programmatic
     tenant_id = str(current_user.tenant_id)
     start_ts = f"{start_date}T00:00:00Z"
     end_ts = f"{end_date}T23:59:59Z"
@@ -288,8 +291,10 @@ async def get_campaign_revenue_share(
             'is_deleted': False
         }).gte('created_at', start_ts).lte('created_at', end_ts)
 
-        # --- DATA SCOPE FILTERING (RLS) ---
-        if current_user.role not in HIGH_LEVEL_ROLES:
+        # --- DATA SCOPE FILTERING (DYNAMIC) ---
+        can_view_all = await check_permission_programmatic(current_user, db, "data", "view_all", module="finance")
+
+        if not can_view_all:
             query = query.eq('agent_id', str(current_user.id))
 
         if status and status != "All":
@@ -323,11 +328,13 @@ async def get_finance_trends(
     status: Optional[str] = Query(None),
     campaign_id: Optional[str] = Query(None),
     current_user: UserProfile = Depends(get_current_user),
+    db: AsyncSession = Depends(deps.get_db), # Added for Permission Check
     _: bool = Depends(check_permission("finance", "summary", module="finance"))
 ):
     """
     Series de tiempo filtradas por estatus y campaña con lógica de comisiones corregida.
     """
+    from app.core.security import check_permission_programmatic
     tenant_id = str(current_user.tenant_id)
     start_ts = f"{start_date}T00:00:00Z"
     end_ts = f"{end_date}T23:59:59Z"
@@ -338,8 +345,10 @@ async def get_finance_trends(
             'is_deleted': False
         }).gte('created_at', start_ts).lte('created_at', end_ts)
 
-        # --- DATA SCOPE FILTERING (RLS) ---
-        if current_user.role not in HIGH_LEVEL_ROLES:
+        # --- DATA SCOPE FILTERING (DYNAMIC) ---
+        can_view_all = await check_permission_programmatic(current_user, db, "data", "view_all", module="finance")
+
+        if not can_view_all:
             query = query.eq('agent_id', str(current_user.id))
 
         if status and status != "All":

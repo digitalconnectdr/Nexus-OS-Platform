@@ -46,7 +46,7 @@ async def read_sales(
     has_permission = False
     try:
         if scope == "history":
-             checker = check_permission("sales", "read_history", module="history")
+             checker = check_permission("sales", "read", module="history")
         else:
              checker = check_permission("sales", "read", module="dashboard")
         await checker(current_user, db)
@@ -263,7 +263,7 @@ async def delete_sale(
 ):
     # --- DYNAMIC PERMISSION CHECK (Dashboard OR History) ---
     has_perm = False
-    for mod, res, act in [("dashboard", "sales", "delete_soft"), ("history", "sales", "delete_soft")]:
+    for mod, res, act in [("dashboard", "sales", "delete"), ("history", "sales", "delete")]:
         try:
             checker = check_permission(res, act, module=mod)
             await checker(current_user, db)
@@ -520,7 +520,7 @@ async def export_sales(
 ):
     # --- DYNAMIC FUNCTIONAL PERMISSION CHECK ---
     if scope == "history":
-        checker = check_permission("sales", "export_history", module="history")
+        checker = check_permission("sales", "export", module="history")
     else:
         checker = check_permission("sales", "export", module="dashboard")
     
@@ -540,9 +540,11 @@ async def export_sales(
             SalesOrder.tenant_id == current_user.tenant_id
         )
         
-        # --- DATA SCOPE FILTERING ---
-        high_level_roles = [UserRole.SUPER_ADMIN, UserRole.ADMINISTRADOR, UserRole.GERENTE, UserRole.SUPERVISOR, UserRole.SUPERVISOR_SENIOR]
-        if current_user.role not in high_level_roles:
+        # --- DATA SCOPE FILTERING (DYNAMIC) ---
+        from app.core.security import check_permission_programmatic
+        can_view_all = await check_permission_programmatic(current_user, db, "data", "view_all", module="dashboard")
+        
+        if not can_view_all:
             logger.info(f"🔒 Restricted export scope for {current_user.email}")
             query = query.where(SalesOrder.agent_id == current_user.id)
 

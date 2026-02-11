@@ -19,7 +19,9 @@ async def bootstrap(
     Reduces network roundtrips and prevents UI flickering.
     """
     # 1. Fetch permissions for the user's role
-    role_str = str(current_user.role.value) if hasattr(current_user.role, 'value') else str(current_user.role)
+    from app.schemas.user_schemas import UserRole
+    # CRITICAL FIX: Normalize role to match DB storage (e.g. "Super Admin" -> "super_admin")
+    role_str = UserRole.normalize(str(current_user.role))
     
     # FIX: Filter by tenant_id to avoid cross-tenant pollution
     perm_query = select(RolePermission).where(

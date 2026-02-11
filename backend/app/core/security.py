@@ -41,7 +41,15 @@ def get_role_level(role_name: str) -> int:
     # Normalize for lookup
     from app.schemas.user_schemas import UserRole
     norm = UserRole.normalize(role_name)
-    return ROLE_HIERARCHY.get(norm, 0)
+    
+    # Try to look up by Enum member first if possible, otherwise by string
+    # Because ROLE_HIERARCHY keys are Enum members
+    try:
+        enum_role = UserRole(norm)
+        return ROLE_HIERARCHY.get(enum_role, 0)
+    except ValueError:
+        # If not in enum, try direct string lookup (fallback)
+        return ROLE_HIERARCHY.get(norm, 0)
 
 async def get_current_user(
     request: Request,
@@ -112,63 +120,77 @@ async def get_current_user(
 
     raise HTTPException(status_code=500, detail="Base de datos no disponible")
 
+async def check_permission_programmatic(
+    user: UserProfile,
+    db: AsyncSession,
+    resource: str,
+    action: str,
+    module: Optional[str] = None
+) -> bool:
+    """
+    Verifica permisos programáticamente dentro de la lógica del endpoint.
+    Retorna True/False en lugar de lanzar excepción.
+    """
+    # 0. Master Key: Super Admin Bypass
+    if user.is_super_admin:
+        return True
+
+    # 1. Normalization
+    resource = resource.lower() if resource else resource
+    action = action.lower() if action else action
+    if module:
+        module = module.lower()
+        
+    # 2. Role Normalization
+    from app.schemas.user_schemas import UserRole
+    role_str = UserRole.normalize(user.role)
+    
+    # 3. Query DB
+    from sqlalchemy import func
+    filters = [
+        RolePermission.role == role_str,
+        RolePermission.resource == resource,
+        RolePermission.action == action,
+        RolePermission.tenant_id == user.tenant_id,
+        RolePermission.is_allowed == True
+    ]
+    
+    if module:
+        filters.append(RolePermission.module == module)
+        
+    query = select(RolePermission).where(*filters)
+    result = await db.execute(query)
+    perm = result.scalar_one_or_none()
+    
+    return perm is not None
+
 def check_permission(resource: str, action: str, module: Optional[str] = None):
     """
     FastAPI Dependency to check RBAC permissions.
     Usage: Depends(check_permission("users", "create", module="users"))
     """
-    # 0. Normalization (TECHNICAL REQUIREMENT: Lowercase everything for DB sync)
-    resource = resource.lower() if resource else resource
-    action = action.lower() if action else action
-    if module:
-        module = module.lower()
-
     async def dependency(
         user: UserProfile = Depends(get_current_user), 
         db: AsyncSession = Depends(get_db)
     ):
-        # 1. Master Key: Super Admin Bypass (IMMEDIATE - NO DB HIT)
-        # This is the "God Mode" rule as requested in Phase 2.
-        if user.role == "super_admin" or user.is_super_admin:
-            return True
+        start_time = asyncio.get_event_loop().time()
         
-        # NORMALIZATION: Ensure role enters lowercase for matching
-        from app.schemas.user_schemas import UserRole
-        role_str = UserRole.normalize(user.role)
-
-        import logging
-        logger = logging.getLogger(__name__)
+        has_perm = await check_permission_programmatic(user, db, resource, action, module)
         
-        # Log detected role for diagnostic flow
-        logger.info(f"DEBUG: User role detected: [{user.role}]")
-            
-        from sqlalchemy import func
-        
-        # 2. Strict Verification
-        filters = [
-            RolePermission.role == role_str,
-            RolePermission.resource == resource,
-            RolePermission.action == action,
-            RolePermission.tenant_id == user.tenant_id
-        ]
-        
-        if module:
-            filters.append(RolePermission.module == module)
-            
-        # We query for an ALLOWED permission
-        query = select(RolePermission).where(*filters, RolePermission.is_allowed == True)
-        
-        result = await db.execute(query)
-        perm = result.scalar_one_or_none()
-        
-        if not perm:
+        if not has_perm:
+            # Enhanced Logging
+            from app.schemas.user_schemas import UserRole
+            role_str = UserRole.normalize(user.role)
             logger.warning(f"⛔ ACCESS DENIED for {user.email} ({role_str}): {module}:{resource}:{action}")
             
-            # Zero Translation Error Message
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Access Denied: {module}:{resource}:{action}"
             )
+        
+        # Telemetry (Optional - keep it light)
+        # duration = asyncio.get_event_loop().time() - start_time
+        # if duration > 0.1: logger.warning(f"SLOW PERM CHECK: {duration:.4f}s")
         
         return True
         
